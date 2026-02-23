@@ -128,6 +128,8 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).toContain('OPENCODE_SHARED_HOME="/home/dev/.codex-shared/opencode"')
         expect(entrypoint).toContain('OPENCODE_CONFIG_DIR="/home/dev/.config/opencode"')
         expect(entrypoint).toContain('"plugin": ["oh-my-opencode"]')
+        expect(entrypoint).toContain("branch '$REPO_REF' missing; retrying without --branch")
+        expect(entrypoint).not.toContain("git ls-remote --symref")
         expect(composeBefore).toContain(":/home/dev/.docker-git")
         expect(composeBefore).not.toContain("dg-test-browser")
         expect(composeBefore).toContain("docker-git-shared")
