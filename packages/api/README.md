@@ -1,28 +1,43 @@
 # @effect-template/api
 
-Clean-slate v1 HTTP API for docker-git orchestration.
+HTTP API for docker-git orchestration (projects, agents, logs/events, federation).
 
 ## UI wrapper
 
-После запуска API открой:
+After API startup open:
 
 - `http://localhost:3334/`
 
-Это встроенная фронт-обвязка для ручного тестирования endpoint-ов (проекты, агенты, логи, SSE).
+This page is a built-in UI shell for manual API checks without CLI.
 
-## Run
+## Run (local)
 
 ```bash
 pnpm --filter ./packages/api build
 pnpm --filter ./packages/api start
 ```
 
-Env:
+## Run (dedicated Docker for API)
 
+From repository root:
+
+```bash
+docker compose -f docker-compose.api.yml up -d --build
+curl -s http://127.0.0.1:3334/health
+```
+
+Default port mapping:
+
+- host: `127.0.0.1:3334`
+- container: `3334`
+
+Optional env:
+
+- `DOCKER_GIT_API_BIND_HOST` (default: `127.0.0.1`)
 - `DOCKER_GIT_API_PORT` (default: `3334`)
-- `DOCKER_GIT_PROJECTS_ROOT` (default: `~/.docker-git`)
-- `DOCKER_GIT_API_LOG_LEVEL` (default: `info`)
-- `DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN` (optional public ActivityPub domain, e.g. `https://social.my-domain.tld`)
+- `DOCKER_GIT_PROJECTS_ROOT_HOST` (host path with docker-git projects, default: `/home/dev/.docker-git`)
+- `DOCKER_GIT_PROJECTS_ROOT` (container path, default: `/home/dev/.docker-git`)
+- `DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN` (optional public ActivityPub origin)
 - `DOCKER_GIT_FEDERATION_ACTOR` (default: `docker-git`)
 
 ## Endpoints
@@ -35,7 +50,7 @@ Env:
 - `GET /federation/followers`
 - `GET /federation/following`
 - `GET /federation/liked`
-- `POST /federation/follows` (create ActivityPub `Follow` activity for task-feed subscription)
+- `POST /federation/follows` (create ActivityPub `Follow` subscription)
 - `GET /federation/follows`
 - `GET /projects`
 - `GET /projects/:projectId`
@@ -54,20 +69,71 @@ Env:
 - `POST /projects/:projectId/agents/:agentId/stop`
 - `GET /projects/:projectId/agents/:agentId/logs`
 
-## Example
+## Subscription workflow (ActivityPub Follow + ForgeFed issues)
+
+1. Read actor profile (contains `inbox/outbox/followers/following/liked`):
 
 ```bash
-curl -s http://localhost:3334/projects
-curl -s -X POST http://localhost:3334/projects/<projectId>/up
-curl -s -N http://localhost:3334/projects/<projectId>/events
+curl -s http://127.0.0.1:3334/federation/actor
+```
 
-curl -s http://localhost:3334/federation/actor
+2. Create follow subscription:
 
-curl -s -X POST http://localhost:3334/federation/follows \
+```bash
+curl -sS -X POST http://127.0.0.1:3334/federation/follows \
   -H 'content-type: application/json' \
-  -d '{"domain":"social.my-domain.tld","object":"https://social.my-domain.tld/issues/followers"}'
+  -d '{
+    "domain":"https://social.provercoder.ai",
+    "actor":"https://dev.example/users/bot",
+    "object":"https://tracker.example/issues/followers",
+    "capability":"https://tracker.example/caps/follow"
+  }'
+```
 
-curl -s -X POST http://localhost:3334/federation/inbox \
+`domain` is used as public origin. `.example` hosts in `actor/object/capability` are normalized to that domain.
+
+3. Confirm subscription by sending `Accept` into inbox:
+
+```bash
+curl -sS -X POST http://127.0.0.1:3334/federation/inbox \
   -H 'content-type: application/json' \
-  -d '{"@context":["https://www.w3.org/ns/activitystreams","https://forgefed.org/ns"],"id":"https://social.my-domain.tld/offers/42","type":"Offer","target":"https://social.my-domain.tld/issues","object":{"type":"Ticket","id":"https://social.my-domain.tld/issues/42","attributedTo":"https://origin.my-domain.tld/users/alice","summary":"Title","content":"Body"}}'
+  -d '{
+    "@context":"https://www.w3.org/ns/activitystreams",
+    "type":"Accept",
+    "object":"https://social.provercoder.ai/federation/activities/follows/<id>"
+  }'
+```
+
+4. Verify follow state and collections:
+
+```bash
+curl -s http://127.0.0.1:3334/federation/follows
+curl -s http://127.0.0.1:3334/federation/following
+curl -s http://127.0.0.1:3334/federation/outbox
+```
+
+5. Push issue offer through ForgeFed inbox:
+
+```bash
+curl -sS -X POST http://127.0.0.1:3334/federation/inbox \
+  -H 'content-type: application/json' \
+  -d '{
+    "@context":["https://www.w3.org/ns/activitystreams","https://forgefed.org/ns"],
+    "id":"https://social.provercoder.ai/offers/42",
+    "type":"Offer",
+    "target":"https://social.provercoder.ai/issues",
+    "object":{
+      "type":"Ticket",
+      "id":"https://social.provercoder.ai/issues/42",
+      "attributedTo":"https://origin.provercoder.ai/users/alice",
+      "summary":"Need reproducible CI parity",
+      "content":"Implement API behavior matching CLI."
+    }
+  }'
+```
+
+6. Verify persisted issues:
+
+```bash
+curl -s http://127.0.0.1:3334/federation/issues
 ```

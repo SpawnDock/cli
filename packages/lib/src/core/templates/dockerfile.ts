@@ -182,7 +182,7 @@ RUN mkdir -p ${config.targetDir} \
   && if [ "${config.targetDir}" != "/" ]; then chown -R 1000:1000 "${config.targetDir}"; fi
 
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/entrypoint.sh"]`

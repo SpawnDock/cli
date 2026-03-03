@@ -37,6 +37,25 @@ pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force-env
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --mcp-playwright
 ```
 
+## API Docker (separate runtime)
+
+HTTP API (`packages/api`) has a dedicated Docker image and compose file:
+
+```bash
+docker compose -f docker-compose.api.yml up -d --build
+curl -s http://127.0.0.1:3334/health
+```
+
+By default API port `3334` is published to host (`127.0.0.1:3334`).
+
+Useful env overrides:
+- `DOCKER_GIT_API_BIND_HOST` (default: `127.0.0.1`)
+- `DOCKER_GIT_API_PORT` (default: `3334`)
+- `DOCKER_GIT_PROJECTS_ROOT_HOST` (host path, default: `/home/dev/.docker-git`)
+- `DOCKER_GIT_PROJECTS_ROOT` (container path, default: `/home/dev/.docker-git`)
+
+Detailed federation subscription workflow and JSON examples are documented in `packages/api/README.md`.
+
 ## Parallel Issues / PRs
 
 When you clone GitHub issue or PR URLs, docker-git creates isolated project paths and container names:
