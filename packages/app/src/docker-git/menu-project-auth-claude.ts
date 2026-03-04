@@ -4,6 +4,8 @@ import { Effect } from "effect"
 
 const oauthTokenFileName = ".oauth-token"
 const legacyConfigFileName = ".config.json"
+const credentialsFileName = ".credentials.json"
+const nestedCredentialsFileName = ".claude/.credentials.json"
 
 const hasFileAtPath = (
   fs: FileSystem.FileSystem,
@@ -53,7 +55,19 @@ export const hasClaudeAccountCredentials = (
   fs: FileSystem.FileSystem,
   accountPath: string
 ): Effect.Effect<boolean, PlatformError> =>
-  hasFileAtPath(fs, `${accountPath}/${legacyConfigFileName}`).pipe(
+  hasFileAtPath(fs, `${accountPath}/${credentialsFileName}`).pipe(
+    Effect.flatMap((hasCredentialsFile) => {
+      if (hasCredentialsFile) {
+        return Effect.succeed(true)
+      }
+      return hasFileAtPath(fs, `${accountPath}/${nestedCredentialsFileName}`)
+    }),
+    Effect.flatMap((hasNestedCredentialsFile) => {
+      if (hasNestedCredentialsFile) {
+        return Effect.succeed(true)
+      }
+      return hasFileAtPath(fs, `${accountPath}/${legacyConfigFileName}`)
+    }),
     Effect.flatMap((hasConfig) => {
       if (hasConfig) {
         return Effect.succeed(true)

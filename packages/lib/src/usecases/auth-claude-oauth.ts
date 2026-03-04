@@ -10,6 +10,7 @@ import { AuthError, CommandFailedError } from "../shell/errors.js"
 
 const oauthTokenEnvKey = "DOCKER_GIT_CLAUDE_OAUTH_TOKEN"
 const tokenMarker = "Your OAuth token (valid for 1 year):"
+const tokenFooterMarker = "Store this token securely."
 const outputWindowSize = 262_144
 
 const oauthTokenRegex = /([A-Za-z0-9][A-Za-z0-9._-]{20,})/u
@@ -85,8 +86,23 @@ const extractOauthToken = (rawOutput: string): string | null => {
   }
 
   const tail = normalized.slice(markerIndex + tokenMarker.length)
-  const match = oauthTokenRegex.exec(tail)
-  return match?.[1] ?? null
+  const footerIndex = tail.indexOf(tokenFooterMarker)
+  const tokenSection = footerIndex === -1 ? tail : tail.slice(0, footerIndex)
+
+  // CHANGE: join wrapped lines in token section before parsing
+  // WHY: some terminals hard-wrap long OAuth tokens with newline characters
+  // REF: issue-377
+  // SOURCE: n/a
+  // PURITY: CORE
+  // INVARIANT: only whitespace is removed; token alphabet remains intact
+  const compactSection = tokenSection.replaceAll(/\s+/gu, "")
+  const compactMatch = oauthTokenRegex.exec(compactSection)
+  if (compactMatch?.[1] !== undefined) {
+    return compactMatch[1]
+  }
+
+  const directMatch = oauthTokenRegex.exec(tokenSection)
+  return directMatch?.[1] ?? null
 }
 
 const oauthTokenFromEnv = (): string | null => {
@@ -120,12 +136,17 @@ const buildDockerSetupTokenSpec = (
   image,
   hostPath: accountPath,
   containerPath,
-  env: [`CLAUDE_CONFIG_DIR=${containerPath}`],
+  env: [`CLAUDE_CONFIG_DIR=${containerPath}`, `HOME=${containerPath}`, "BROWSER=echo"],
   args: ["setup-token"]
 })
 
 const buildDockerSetupTokenArgs = (spec: DockerSetupTokenSpec): ReadonlyArray<string> => {
   const base: Array<string> = ["run", "--rm", "-i", "-t", "-v", `${spec.hostPath}:${spec.containerPath}`]
+  const getUid = (process as { readonly getuid?: () => number }).getuid
+  const getGid = (process as { readonly getgid?: () => number }).getgid
+  if (typeof getUid === "function" && typeof getGid === "function") {
+    base.push("--user", `${getUid()}:${getGid()}`)
+  }
   for (const entry of spec.env) {
     const trimmed = entry.trim()
     if (trimmed.length === 0) {
@@ -187,9 +208,6 @@ const pumpDockerOutput = (
   ).pipe(Effect.asVoid)
 }
 
-const ensureExitOk = (exitCode: number): Effect.Effect<void, CommandFailedError> =>
-  exitCode === 0 ? Effect.void : Effect.fail(new CommandFailedError({ command: "claude setup-token", exitCode }))
-
 const resolveCapturedToken = (token: string | null): Effect.Effect<string, AuthError> =>
   token === null
     ? Effect.fail(
@@ -199,6 +217,29 @@ const resolveCapturedToken = (token: string | null): Effect.Effect<string, AuthE
       })
     )
     : ensureOauthToken(token)
+
+const resolveLoginResult = (
+  token: string | null,
+  exitCode: number
+): Effect.Effect<string, AuthError | CommandFailedError> =>
+  Effect.gen(function*(_) {
+    if (token !== null) {
+      if (exitCode !== 0) {
+        yield* _(
+          Effect.logWarning(
+            `claude setup-token returned exit=${exitCode}, but OAuth token was captured; continuing.`
+          )
+        )
+      }
+      return yield* _(ensureOauthToken(token))
+    }
+
+    if (exitCode !== 0) {
+      yield* _(Effect.fail(new CommandFailedError({ command: "claude setup-token", exitCode })))
+    }
+
+    return yield* _(resolveCapturedToken(token))
+  })
 
 export const runClaudeOauthLoginWithPrompt = (
   cwd: string,
@@ -226,9 +267,7 @@ export const runClaudeOauthLoginWithPrompt = (
       const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
       yield* _(Fiber.join(stdoutFiber))
       yield* _(Fiber.join(stderrFiber))
-      yield* _(ensureExitOk(exitCode))
-
-      return yield* _(resolveCapturedToken(tokenBox.value))
+      return yield* _(resolveLoginResult(tokenBox.value, exitCode))
     })
   )
 }

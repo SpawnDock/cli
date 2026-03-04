@@ -13,7 +13,7 @@ import type * as ShellErrors from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
 import { resolveBaseDir } from "../shell/paths.js"
 import { applyTemplateOverrides, hasApplyOverrides } from "./apply-overrides.js"
-import { ensureCodexConfigFile } from "./auth-sync.js"
+import { ensureClaudeAuthSeedFromHome, ensureCodexConfigFile } from "./auth-sync.js"
 import { findDockerGitConfigPaths } from "./docker-git-config-search.js"
 import { defaultProjectsRoot, findExistingUpwards } from "./path-helpers.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
@@ -45,6 +45,7 @@ export const applyProjectFiles = (
     const resolvedTemplate = applyTemplateOverrides(config.template, command)
     yield* _(writeProjectFiles(projectDir, resolvedTemplate, true))
     yield* _(ensureCodexConfigFile(projectDir, resolvedTemplate.codexAuthPath))
+    yield* _(ensureClaudeAuthSeedFromHome(defaultProjectsRoot(projectDir), ".orch/auth/claude"))
     return resolvedTemplate
   })
 
@@ -321,6 +322,7 @@ const applyProjectWithUp = (
   Effect.gen(function*(_) {
     yield* _(Effect.log(`Applying docker-git config and refreshing container in ${projectDir}...`))
     yield* _(ensureDockerDaemonAccess(process.cwd()))
+    yield* _(ensureClaudeAuthSeedFromHome(defaultProjectsRoot(projectDir), ".orch/auth/claude"))
     if (hasApplyOverrides(command)) {
       yield* _(applyProjectFiles(projectDir, command))
     }

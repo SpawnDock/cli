@@ -14,9 +14,19 @@ export type DockerAuthSpec = {
   readonly image: string
   readonly volume: DockerVolume
   readonly entrypoint?: string
+  readonly user?: string
   readonly env?: string | ReadonlyArray<string>
   readonly args: ReadonlyArray<string>
   readonly interactive: boolean
+}
+
+const resolveDefaultDockerUser = (): string | null => {
+  const getUid = (process as { readonly getuid?: () => number }).getuid
+  const getGid = (process as { readonly getgid?: () => number }).getgid
+  if (typeof getUid !== "function" || typeof getGid !== "function") {
+    return null
+  }
+  return `${getUid()}:${getGid()}`
 }
 
 const appendEnvArgs = (base: Array<string>, env: string | ReadonlyArray<string>) => {
@@ -38,6 +48,10 @@ const appendEnvArgs = (base: Array<string>, env: string | ReadonlyArray<string>)
 
 const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
   const base: Array<string> = ["run", "--rm"]
+  const dockerUser = (spec.user ?? "").trim() || resolveDefaultDockerUser()
+  if (dockerUser !== null) {
+    base.push("--user", dockerUser)
+  }
   if (spec.interactive) {
     base.push("-it")
   }

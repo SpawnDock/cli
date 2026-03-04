@@ -5,6 +5,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
 import {
+  ensureClaudeAuthSeedFromHome,
   ensureCodexConfigFile,
   migrateLegacyOrchLayout,
   syncGithubAuthKeys
@@ -130,6 +131,79 @@ describe("syncGithubAuthKeys", () => {
         )
         const migratedToken = yield* _(fs.readFileString(migratedTokenPath))
         expect(migratedToken).toBe(expectedToken)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("seeds Claude auth from host home into docker-git default account", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const hostHome = path.join(root, "host-home")
+        const hostClaudeDir = path.join(hostHome, ".claude")
+        const hostClaudeJson = path.join(hostHome, ".claude.json")
+        const hostCredentialsJson = path.join(hostClaudeDir, ".credentials.json")
+
+        yield* _(fs.makeDirectory(hostClaudeDir, { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            hostClaudeJson,
+            JSON.stringify(
+              {
+                oauthAccount: { accountUuid: "acc-1" },
+                userID: "user-1"
+              },
+              null,
+              2
+            )
+          )
+        )
+        yield* _(
+          fs.writeFileString(
+            hostCredentialsJson,
+            JSON.stringify(
+              {
+                claudeAiOauth: { accessToken: "token-1" }
+              },
+              null,
+              2
+            )
+          )
+        )
+
+        const previousHome = process.env["HOME"]
+        yield* _(
+          Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              if (previousHome === undefined) {
+                delete process.env["HOME"]
+              } else {
+                process.env["HOME"] = previousHome
+              }
+            })
+          )
+        )
+        yield* _(Effect.sync(() => {
+          process.env["HOME"] = hostHome
+        }))
+
+        yield* _(ensureClaudeAuthSeedFromHome(root, ".docker-git/.orch/auth/claude"))
+
+        const seededClaudeJson = path.join(root, ".docker-git", ".orch", "auth", "claude", "default", ".claude.json")
+        const seededCredentials = path.join(
+          root,
+          ".docker-git",
+          ".orch",
+          "auth",
+          "claude",
+          "default",
+          ".credentials.json"
+        )
+
+        const seededJsonText = yield* _(fs.readFileString(seededClaudeJson))
+        const seededCredentialsText = yield* _(fs.readFileString(seededCredentials))
+        expect(seededJsonText).toContain("\"oauthAccount\"")
+        expect(seededCredentialsText).toContain("\"claudeAiOauth\"")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

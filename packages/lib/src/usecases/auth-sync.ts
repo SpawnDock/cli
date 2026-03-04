@@ -8,6 +8,7 @@ import { parseEnvEntries, removeEnvKey, upsertEnvKey } from "./env-file.js"
 import { withFsPathContext } from "./runtime.js"
 
 type CopyDecision = "skip" | "copy"
+type JsonRecord = Readonly<Record<string, unknown>>
 
 const defaultEnvContents = "# docker-git env\n# KEY=value\n"
 // CHANGE: enable web search tool in default Codex config (top-level)
@@ -83,6 +84,24 @@ const shouldCopyEnv = (sourceText: string, targetText: string): CopyDecision => 
   }
   return "skip"
 }
+
+const parseJsonRecord = (text: string): JsonRecord | null => {
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as JsonRecord
+  } catch {
+    return null
+  }
+}
+
+const hasClaudeOauthAccount = (record: JsonRecord | null): boolean =>
+  record !== null && typeof record["oauthAccount"] === "object" && record["oauthAccount"] !== null
+
+const hasClaudeCredentials = (record: JsonRecord | null): boolean =>
+  record !== null && typeof record["claudeAiOauth"] === "object" && record["claudeAiOauth"] !== null
 
 const isGithubTokenKey = (key: string): boolean =>
   key === "GITHUB_TOKEN" || key === "GH_TOKEN" || key.startsWith("GITHUB_TOKEN__")
@@ -174,6 +193,131 @@ const copyFileIfNeeded = (
         yield* _(fs.writeFileString(targetPath, sourceText))
         yield* _(Effect.log(`Synced env file from ${sourcePath} to ${targetPath}`))
       }
+    })
+  )
+
+const syncClaudeHomeJson = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourcePath: string,
+  targetPath: string
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const sourceExists = yield* _(fs.exists(sourcePath))
+    if (!sourceExists) {
+      return
+    }
+
+    const sourceInfo = yield* _(fs.stat(sourcePath))
+    if (sourceInfo.type !== "File") {
+      return
+    }
+
+    const sourceText = yield* _(fs.readFileString(sourcePath))
+    const sourceJson = parseJsonRecord(sourceText)
+    const sourceHasOauth = hasClaudeOauthAccount(sourceJson)
+
+    const targetExists = yield* _(fs.exists(targetPath))
+    if (!targetExists) {
+      yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
+      yield* _(fs.copyFile(sourcePath, targetPath))
+      yield* _(Effect.log(`Seeded Claude auth file from ${sourcePath} to ${targetPath}`))
+      return
+    }
+
+    const targetInfo = yield* _(fs.stat(targetPath))
+    if (targetInfo.type !== "File") {
+      return
+    }
+
+    const targetText = yield* _(fs.readFileString(targetPath), Effect.orElseSucceed(() => ""))
+    const targetJson = parseJsonRecord(targetText)
+    const targetHasOauth = hasClaudeOauthAccount(targetJson)
+
+    if (sourceHasOauth && !targetHasOauth) {
+      yield* _(fs.writeFileString(targetPath, sourceText))
+      yield* _(Effect.log(`Updated Claude auth file from ${sourcePath} to ${targetPath}`))
+    }
+  })
+
+const syncClaudeCredentialsJson = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourcePath: string,
+  targetPath: string
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const sourceExists = yield* _(fs.exists(sourcePath))
+    if (!sourceExists) {
+      return
+    }
+
+    const sourceInfo = yield* _(fs.stat(sourcePath))
+    if (sourceInfo.type !== "File") {
+      return
+    }
+
+    const sourceText = yield* _(fs.readFileString(sourcePath))
+    const sourceJson = parseJsonRecord(sourceText)
+    if (!hasClaudeCredentials(sourceJson)) {
+      return
+    }
+
+    const targetExists = yield* _(fs.exists(targetPath))
+    if (!targetExists) {
+      yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
+      yield* _(fs.copyFile(sourcePath, targetPath))
+      yield* _(fs.chmod(targetPath, 0o600), Effect.orElseSucceed(() => void 0))
+      yield* _(Effect.log(`Seeded Claude credentials from ${sourcePath} to ${targetPath}`))
+      return
+    }
+
+    const targetInfo = yield* _(fs.stat(targetPath))
+    if (targetInfo.type !== "File") {
+      return
+    }
+
+    const targetText = yield* _(fs.readFileString(targetPath), Effect.orElseSucceed(() => ""))
+    const targetJson = parseJsonRecord(targetText)
+    if (!hasClaudeCredentials(targetJson)) {
+      yield* _(fs.writeFileString(targetPath, sourceText))
+      yield* _(fs.chmod(targetPath, 0o600), Effect.orElseSucceed(() => void 0))
+      yield* _(Effect.log(`Updated Claude credentials from ${sourcePath} to ${targetPath}`))
+    }
+  })
+
+// CHANGE: seed docker-git Claude auth store from host-level Claude files
+// WHY: Claude Code (v2+) keeps OAuth session in ~/.claude.json and ~/.claude/.credentials.json
+// QUOTE(ТЗ): "глобальная авторизация для клода ... должна сама везде настроиться"
+// REF: user-request-2026-03-04-claude-global-auth-seed
+// SOURCE: https://docs.anthropic.com/en/docs/claude-code/settings (section: \"Files and settings\", mentions ~/.claude.json)
+// FORMAT THEOREM: ∀p: project(p) → (host_claude_auth_exists → project_claude_auth_seeded)
+// PURITY: SHELL
+// EFFECT: Effect<void, PlatformError, FileSystem | Path>
+// INVARIANT: never deletes existing auth data; only seeds missing/incomplete Claude auth files
+// COMPLEXITY: O(1)
+export const ensureClaudeAuthSeedFromHome = (
+  baseDir: string,
+  claudeAuthPath: string
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  withFsPathContext(({ fs, path }) =>
+    Effect.gen(function*(_) {
+      const homeDir = (process.env["HOME"] ?? "").trim()
+      if (homeDir.length === 0) {
+        return
+      }
+
+      const sourceClaudeJson = path.join(homeDir, ".claude.json")
+      const sourceCredentials = path.join(homeDir, ".claude", ".credentials.json")
+
+      const claudeRoot = resolvePathFromBase(path, baseDir, claudeAuthPath)
+      const targetAccountDir = path.join(claudeRoot, "default")
+      const targetClaudeJson = path.join(targetAccountDir, ".claude.json")
+      const targetCredentials = path.join(targetAccountDir, ".credentials.json")
+
+      yield* _(fs.makeDirectory(targetAccountDir, { recursive: true }))
+      yield* _(syncClaudeHomeJson(fs, path, sourceClaudeJson, targetClaudeJson))
+      yield* _(syncClaudeCredentialsJson(fs, path, sourceCredentials, targetCredentials))
     })
   )
 

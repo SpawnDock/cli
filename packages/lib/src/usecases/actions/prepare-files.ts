@@ -1,12 +1,17 @@
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
-import type * as Path from "@effect/platform/Path"
+import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
 import type { CreateCommand } from "../../core/domain.js"
 import type { FileExistsError } from "../../shell/errors.js"
 import { writeProjectFiles } from "../../shell/files.js"
-import { ensureCodexConfigFile, migrateLegacyOrchLayout, syncAuthArtifacts } from "../auth-sync.js"
+import {
+  ensureClaudeAuthSeedFromHome,
+  ensureCodexConfigFile,
+  migrateLegacyOrchLayout,
+  syncAuthArtifacts
+} from "../auth-sync.js"
 import { findAuthorizedKeysSource, resolveAuthorizedKeysPath } from "../path-helpers.js"
 import { withFsPathContext } from "../runtime.js"
 import { resolvePathFromBase } from "./paths.js"
@@ -122,6 +127,7 @@ export const prepareProjectFiles = (
   options: PrepareProjectFilesOptions
 ): Effect.Effect<ReadonlyArray<string>, PrepareProjectFilesError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
     const rewriteManagedFiles = options.force || options.forceEnv
     const envOnlyRefresh = options.forceEnv && !options.force
     const createdFiles = yield* _(
@@ -138,6 +144,8 @@ export const prepareProjectFiles = (
       )
     )
     yield* _(ensureCodexConfigFile(baseDir, globalConfig.codexAuthPath))
+    const globalClaudeAuthPath = path.join(path.dirname(globalConfig.codexAuthPath), "claude")
+    yield* _(ensureClaudeAuthSeedFromHome(baseDir, globalClaudeAuthPath))
     yield* _(
       syncAuthArtifacts({
         sourceBase: baseDir,
