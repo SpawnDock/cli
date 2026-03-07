@@ -71,6 +71,12 @@ describe("renderEntrypoint auth bridge", () => {
       expect(entrypoint).toContain("CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"")
       expect(entrypoint).toContain("CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"")
       expect(entrypoint).toContain("docker-git-managed:claude-md")
+      expect(entrypoint).toContain(
+        "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
+      )
+      expect(entrypoint.split("Для решения задач обязательно используй subagents.").length - 1).toBeGreaterThanOrEqual(
+        2
+      )
       expect(entrypoint).toContain("token=\"${GITHUB_TOKEN:-}\"")
       expect(entrypoint).toContain("token=\"${GH_TOKEN:-}\"")
       expect(entrypoint).toContain(String.raw`printf "%s\n" "password=$token"`)

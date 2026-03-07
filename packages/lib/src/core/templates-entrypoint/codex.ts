@@ -216,6 +216,7 @@ WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
 FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
+SUBAGENTS_LINE="Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю."
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
@@ -257,6 +258,7 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
+$SUBAGENTS_LINE
 $MANAGED_END
 EOF
 )"
@@ -277,6 +279,7 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
+$SUBAGENTS_LINE
 $MANAGED_END
 EOF
 )"
@@ -296,6 +299,7 @@ EOF
       -e '/^Фокус задачи:/d' \
       -e '/^Issue AGENTS.md:/d' \
       -e '/^Доступ к интернету:/d' \
+      -e '/^Для решения задач обязательно используй subagents[.]/d' \
       "$AGENTS_PATH" > "$TMP_AGENTS_PATH"
     if [[ -s "$TMP_AGENTS_PATH" ]]; then
       printf "\n" >> "$TMP_AGENTS_PATH"
