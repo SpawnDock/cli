@@ -2,6 +2,8 @@ export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
 export { deriveRepoPathParts, deriveRepoSlug, resolveRepoInput } from "./repo.js"
 
+export type AgentMode = "claude" | "codex"
+
 export type DockerNetworkMode = "shared" | "project"
 
 export const defaultDockerNetworkMode: DockerNetworkMode = "shared"
@@ -32,6 +34,8 @@ export interface TemplateConfig {
   readonly dockerSharedNetworkName: string
   readonly enableMcpPlaywright: boolean
   readonly pnpmVersion: string
+  readonly agentMode?: AgentMode | undefined
+  readonly agentAuto?: boolean | undefined
 }
 
 export interface ProjectConfig {

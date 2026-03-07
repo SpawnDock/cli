@@ -47,6 +47,9 @@ export interface RawOptions {
   readonly openSsh?: boolean
   readonly force?: boolean
   readonly forceEnv?: boolean
+  readonly agentClaude?: boolean
+  readonly agentCodex?: boolean
+  readonly agentAuto?: boolean
 }
 
 // CHANGE: helper type alias for builder signatures that produce parse errors

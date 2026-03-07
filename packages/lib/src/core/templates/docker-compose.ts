@@ -6,6 +6,8 @@ type ComposeFragments = {
   readonly maybeGitTokenLabelEnv: string
   readonly maybeCodexAuthLabelEnv: string
   readonly maybeClaudeAuthLabelEnv: string
+  readonly maybeAgentModeEnv: string
+  readonly maybeAgentAutoEnv: string
   readonly maybeDependsOn: string
   readonly maybePlaywrightEnv: string
   readonly maybeBrowserService: string
@@ -31,6 +33,16 @@ const renderCodexAuthLabelEnv = (codexAuthLabel: string): string =>
 const renderClaudeAuthLabelEnv = (claudeAuthLabel: string): string =>
   claudeAuthLabel.length > 0
     ? `      CLAUDE_AUTH_LABEL: "${claudeAuthLabel}"\n`
+    : ""
+
+const renderAgentModeEnv = (agentMode: string | undefined): string =>
+  agentMode !== undefined && agentMode.length > 0
+    ? `      AGENT_MODE: "${agentMode}"\n`
+    : ""
+
+const renderAgentAutoEnv = (agentAuto: boolean | undefined): string =>
+  agentAuto === true
+    ? `      AGENT_AUTO: "1"\n`
     : ""
 
 const buildPlaywrightFragments = (
@@ -72,6 +84,8 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
   const maybeGitTokenLabelEnv = renderGitTokenLabelEnv(gitTokenLabel)
   const maybeCodexAuthLabelEnv = renderCodexAuthLabelEnv(codexAuthLabel)
   const maybeClaudeAuthLabelEnv = renderClaudeAuthLabelEnv(claudeAuthLabel)
+  const maybeAgentModeEnv = renderAgentModeEnv(config.agentMode)
+  const maybeAgentAutoEnv = renderAgentAutoEnv(config.agentAuto)
   const playwright = buildPlaywrightFragments(config, networkName)
 
   return {
@@ -80,6 +94,8 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
     maybeGitTokenLabelEnv,
     maybeCodexAuthLabelEnv,
     maybeClaudeAuthLabelEnv,
+    maybeAgentModeEnv,
+    maybeAgentAutoEnv,
     maybeDependsOn: playwright.maybeDependsOn,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserService: playwright.maybeBrowserService,
@@ -100,7 +116,7 @@ const renderComposeServices = (config: TemplateConfig, fragments: ComposeFragmen
       FORK_REPO_URL: "${fragments.forkRepoUrl}"
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
 ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
-${fragments.maybeClaudeAuthLabelEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
+${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
 ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:

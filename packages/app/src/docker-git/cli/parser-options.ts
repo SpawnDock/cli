@@ -88,7 +88,10 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--wipe": (raw) => ({ ...raw, wipe: true }),
   "--no-wipe": (raw) => ({ ...raw, wipe: false }),
   "--web": (raw) => ({ ...raw, authWeb: true }),
-  "--include-default": (raw) => ({ ...raw, includeDefault: true })
+  "--include-default": (raw) => ({ ...raw, includeDefault: true }),
+  "--claude": (raw) => ({ ...raw, agentClaude: true }),
+  "--codex": (raw) => ({ ...raw, agentCodex: true }),
+  "--auto": (raw) => ({ ...raw, agentAuto: true })
 }
 
 const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: string) => RawOptions } = {

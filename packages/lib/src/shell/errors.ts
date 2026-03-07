@@ -38,6 +38,11 @@ export class CloneFailedError extends Data.TaggedError("CloneFailedError")<{
   readonly targetDir: string
 }> {}
 
+export class AgentFailedError extends Data.TaggedError("AgentFailedError")<{
+  readonly agentMode: string
+  readonly targetDir: string
+}> {}
+
 export class PortProbeError extends Data.TaggedError("PortProbeError")<{
   readonly port: number
   readonly message: string

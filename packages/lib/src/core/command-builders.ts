@@ -3,6 +3,7 @@ import { Either } from "effect"
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { type RawOptions } from "./command-options.js"
 import {
+  type AgentMode,
   type CreateCommand,
   defaultTemplateConfig,
   deriveRepoPathParts,
@@ -226,9 +227,19 @@ type BuildTemplateConfigInput = {
   readonly codexAuthLabel: string | undefined
   readonly claudeAuthLabel: string | undefined
   readonly enableMcpPlaywright: boolean
+  readonly agentMode: AgentMode | undefined
+  readonly agentAuto: boolean
+}
+
+const resolveAgentMode = (raw: RawOptions): AgentMode | undefined => {
+  if (raw.agentClaude) return "claude"
+  if (raw.agentCodex) return "codex"
+  return undefined
 }
 
 const buildTemplateConfig = ({
+  agentAuto,
+  agentMode,
   claudeAuthLabel,
   codexAuthLabel,
   dockerNetworkMode,
@@ -260,7 +271,9 @@ const buildTemplateConfig = ({
   dockerNetworkMode,
   dockerSharedNetworkName,
   enableMcpPlaywright,
-  pnpmVersion: defaultTemplateConfig.pnpmVersion
+  pnpmVersion: defaultTemplateConfig.pnpmVersion,
+  agentMode,
+  agentAuto
 })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -288,6 +301,8 @@ export const buildCreateCommand = (
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
     )
+    const agentMode = resolveAgentMode(raw)
+    const agentAuto = raw.agentAuto ?? false
 
     return {
       _tag: "Create",
@@ -306,7 +321,9 @@ export const buildCreateCommand = (
         gitTokenLabel,
         codexAuthLabel,
         claudeAuthLabel,
-        enableMcpPlaywright: behavior.enableMcpPlaywright
+        enableMcpPlaywright: behavior.enableMcpPlaywright,
+        agentMode,
+        agentAuto
       })
     }
   })

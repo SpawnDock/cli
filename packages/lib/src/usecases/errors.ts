@@ -3,6 +3,7 @@ import { Match } from "effect"
 import { type ParseError } from "../core/domain.js"
 import { formatParseError } from "../core/parse-errors.js"
 import type {
+  AgentFailedError,
   AuthError,
   CloneFailedError,
   CommandFailedError,
@@ -24,6 +25,7 @@ export type AppError =
   | ParseError
   | FileExistsError
   | CloneFailedError
+  | AgentFailedError
   | DockerAccessError
   | DockerCommandError
   | ConfigNotFoundError
@@ -95,6 +97,8 @@ const renderPrimaryError = (error: NonParseError): string | null =>
       ].join("\n")),
     Match.when({ _tag: "CloneFailedError" }, ({ repoRef, repoUrl, targetDir }) =>
       `Clone failed for ${repoUrl} (${repoRef}) into ${targetDir}`),
+    Match.when({ _tag: "AgentFailedError" }, ({ agentMode, targetDir }) =>
+      `Agent (${agentMode}) failed in ${targetDir}`),
     Match.when({ _tag: "PortProbeError" }, ({ message, port }) =>
       `SSH port check failed for ${port}: ${message}`),
     Match.when(

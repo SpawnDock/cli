@@ -15,15 +15,18 @@ import {
   runDockerNetworkConnectBridge
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
-import { CloneFailedError } from "../../shell/errors.js"
+import { AgentFailedError, CloneFailedError } from "../../shell/errors.js"
 import { ensureComposeNetworkReady } from "../docker-network-gc.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath } from "../path-helpers.js"
 import { buildSshCommand } from "../projects.js"
 
 const maxPortAttempts = 25
 const clonePollInterval = Duration.seconds(1)
+const agentPollInterval = Duration.seconds(2)
 const cloneDonePath = "/run/docker-git/clone.done"
 const cloneFailPath = "/run/docker-git/clone.failed"
+const agentDonePath = "/run/docker-git/agent.done"
+const agentFailPath = "/run/docker-git/agent.failed"
 
 const logSshAccess = (
   baseDir: string,
@@ -48,11 +51,13 @@ const logSshAccess = (
   })
 
 type CloneState = "pending" | "done" | "failed"
-type DockerUpError = CloneFailedError | DockerCommandError | PlatformError
+type AgentState = "pending" | "done" | "failed"
+type DockerUpError = CloneFailedError | AgentFailedError | DockerCommandError | PlatformError
 type DockerUpEnvironment = CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
 type DockerUpOptions = {
   readonly runUp: boolean
   readonly waitForClone: boolean
+  readonly waitForAgent: boolean
   readonly force: boolean
   readonly forceEnv: boolean
 }
@@ -103,6 +108,58 @@ const waitForCloneCompletion = (
           new CloneFailedError({
             repoUrl: config.repoUrl,
             repoRef: config.repoRef,
+            targetDir: config.targetDir
+          })
+        )
+      )
+    }
+  })
+
+const checkAgentState = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<AgentState, PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const failed = yield* _(runDockerExecExitCode(cwd, containerName, ["test", "-f", agentFailPath]))
+    if (failed === 0) {
+      return "failed"
+    }
+
+    const done = yield* _(runDockerExecExitCode(cwd, containerName, ["test", "-f", agentDonePath]))
+    return done === 0 ? "done" : "pending"
+  })
+
+const waitForAgentCompletion = (
+  cwd: string,
+  config: CreateCommand["config"]
+): Effect.Effect<void, AgentFailedError | DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const logsFiber = yield* _(
+      runDockerComposeLogsFollow(cwd).pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning(
+            `docker compose logs --follow failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        ),
+        Effect.fork
+      )
+    )
+    const result = yield* _(
+      checkAgentState(cwd, config.containerName).pipe(
+        Effect.repeat(
+          Schedule.addDelay(
+            Schedule.recurUntil<AgentState>((state) => state !== "pending"),
+            () => agentPollInterval
+          )
+        )
+      )
+    )
+    yield* _(Fiber.interrupt(logsFiber))
+    if (result === "failed") {
+      return yield* _(
+        Effect.fail(
+          new AgentFailedError({
+            agentMode: config.agentMode ?? "unknown",
             targetDir: config.targetDir
           })
         )
@@ -184,8 +241,19 @@ export const runDockerUpIfNeeded = (
       yield* _(Effect.log("Streaming container logs until clone completes..."))
       yield* _(waitForCloneCompletion(resolvedOutDir, projectConfig))
     }
+    if (options.waitForAgent) {
+      yield* _(Effect.log("Waiting for agent to complete..."))
+      yield* _(waitForAgentCompletion(resolvedOutDir, projectConfig))
+    }
     yield* _(Effect.log("Docker environment is up"))
     yield* _(logSshAccess(resolvedOutDir, projectConfig))
   })
+
+export const runDockerDownCleanup = (
+  resolvedOutDir: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runDockerComposeDownVolumes(resolvedOutDir).pipe(
+    Effect.tap(() => Effect.log("Container and volumes removed."))
+  )
 
 export const maxSshPortAttempts = maxPortAttempts

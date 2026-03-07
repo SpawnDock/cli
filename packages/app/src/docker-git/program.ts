@@ -136,6 +136,7 @@ export const program = pipe(
   Effect.catchTag("DockerAccessError", logWarningAndExit),
   Effect.catchTag("DockerCommandError", logWarningAndExit),
   Effect.catchTag("AuthError", logWarningAndExit),
+  Effect.catchTag("AgentFailedError", logWarningAndExit),
   Effect.catchTag("CommandFailedError", logWarningAndExit),
   Effect.catchTag("ScrapArchiveNotFoundError", logErrorAndExit),
   Effect.catchTag("ScrapTargetDirUnsupportedError", logErrorAndExit),
