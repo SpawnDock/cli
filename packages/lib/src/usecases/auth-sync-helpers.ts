@@ -28,20 +28,23 @@ const JsonRecordFromStringSchema = Schema.parseJson(JsonRecordSchema)
 const defaultEnvContents = "# docker-git env\n# KEY=value\n"
 const codexConfigMarker = "# docker-git codex config"
 
-// CHANGE: enable web search tool in default Codex config (top-level)
-// WHY: avoid deprecated legacy flags and keep config minimal
-// QUOTE(ТЗ): "да убери легаси"
-// REF: user-request-2026-02-05-remove-legacy-web-search
+// CHANGE: switch default model to gpt-5.4 and pin xhigh reasoning for default + plan mode
+// WHY: keep plan mode aligned with development mode while preserving long-context defaults
+// QUOTE(ТЗ): "Сделать plan mode тоже с xhigh режимом как и разработка по дефолту. Так же заменить модель на gpt-5.4"
+// REF: github-issue-109
 // SOURCE: n/a
-// FORMAT THEOREM: ∀c: config(c) -> web_search(c)="live"
+// FORMAT THEOREM: ∀c: config(c) -> model(c)="gpt-5.4" ∧ reasoning(c)=xhigh ∧ plan_reasoning(c)=xhigh
 // PURITY: CORE
 // EFFECT: n/a
 // INVARIANT: default config stays deterministic
 // COMPLEXITY: O(1)
 export const defaultCodexConfig = [
   "# docker-git codex config",
-  "model = \"gpt-5.3-codex\"",
+  "model = \"gpt-5.4\"",
+  "model_context_window = 1050000",
+  "model_auto_compact_token_limit = 945000",
   "model_reasoning_effort = \"xhigh\"",
+  "plan_mode_reasoning_effort = \"xhigh\"",
   "personality = \"pragmatic\"",
   "",
   "approval_policy = \"never\"",

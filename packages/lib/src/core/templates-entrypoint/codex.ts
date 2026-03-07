@@ -64,8 +64,11 @@ else
     mkdir -p "$(dirname "$CODEX_CONFIG_FILE")" || true
     cat <<'EOF' > "$CODEX_CONFIG_FILE"
 # docker-git codex config
-model = "gpt-5.3-codex"
+model = "gpt-5.4"
+model_context_window = 1050000
+model_auto_compact_token_limit = 945000
 model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
 personality = "pragmatic"
 
 approval_policy = "never"
@@ -195,12 +198,9 @@ fi`
 
 const escapeForDoubleQuotes = (value: string): string => {
   const backslash = String.fromCodePoint(92)
-  const quote = String.fromCodePoint(34)
-  const escapedBackslash = `${backslash}${backslash}`
-  const escapedQuote = `${backslash}${quote}`
   return value
-    .replaceAll(backslash, escapedBackslash)
-    .replaceAll(quote, escapedQuote)
+    .replaceAll(backslash, `${backslash}${backslash}`)
+    .replaceAll(String.fromCodePoint(34), `${backslash}${String.fromCodePoint(34)}`)
 }
 
 export const renderEntrypointCodexResumeHint = (config: TemplateConfig): string =>

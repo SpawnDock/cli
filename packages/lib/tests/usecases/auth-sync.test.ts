@@ -73,6 +73,63 @@ describe("syncGithubAuthKeys", () => {
     expect(next).toBe(target)
   })
 
+  it.effect("creates codex config with gpt-5.4 and long-context overrides", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const codexDir = path.join(root, ".orch", "auth", "codex")
+        const configPath = path.join(codexDir, "config.toml")
+
+        yield* _(ensureCodexConfigFile(root, ".orch/auth/codex"))
+
+        const configText = yield* _(fs.readFileString(configPath))
+        expect(configText).toContain("model = \"gpt-5.4\"")
+        expect(configText).toContain("model_context_window = 1050000")
+        expect(configText).toContain("model_auto_compact_token_limit = 945000")
+        expect(configText).toContain("model_reasoning_effort = \"xhigh\"")
+        expect(configText).toContain("plan_mode_reasoning_effort = \"xhigh\"")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("rewrites managed codex config to include gpt-5.4 and plan mode xhigh", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const codexDir = path.join(root, ".orch", "auth", "codex")
+        const configPath = path.join(codexDir, "config.toml")
+        const legacyManagedConfig = [
+          "# docker-git codex config",
+          "model = \"gpt-5.3-codex\"",
+          "model_reasoning_effort = \"xhigh\"",
+          "personality = \"pragmatic\"",
+          "",
+          "approval_policy = \"never\"",
+          "sandbox_mode = \"danger-full-access\"",
+          "web_search = \"live\"",
+          "",
+          "[features]",
+          "shell_snapshot = true",
+          "multi_agent = true",
+          "apps = true",
+          "shell_tool = true",
+          ""
+        ].join("\n")
+
+        yield* _(fs.makeDirectory(codexDir, { recursive: true }))
+        yield* _(fs.writeFileString(configPath, legacyManagedConfig))
+        yield* _(ensureCodexConfigFile(root, ".orch/auth/codex"))
+
+        const next = yield* _(fs.readFileString(configPath))
+        expect(next).toContain("model = \"gpt-5.4\"")
+        expect(next).toContain("model_context_window = 1050000")
+        expect(next).toContain("model_auto_compact_token_limit = 945000")
+        expect(next).toContain("model_reasoning_effort = \"xhigh\"")
+        expect(next).toContain("plan_mode_reasoning_effort = \"xhigh\"")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("ignores permission-denied codex config rewrites", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
