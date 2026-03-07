@@ -1,6 +1,5 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import { readFileSync } from "node:fs"
 import { Effect } from "effect"
 
 import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "./command-runner.js"
@@ -31,7 +30,17 @@ const resolveEnvValue = (key: string): string | null => {
   return value && value.length > 0 ? value : null
 }
 
-const trimTrailingSlash = (value: string): string => value.replace(/[\\/]+$/u, "")
+const trimTrailingSlash = (value: string): string => {
+  let end = value.length
+  while (end > 0) {
+    const char = value[end - 1]
+    if (char !== "/" && char !== "\\") {
+      break
+    }
+    end -= 1
+  }
+  return value.slice(0, end)
+}
 
 const pathStartsWith = (candidate: string, prefix: string): boolean =>
   candidate === prefix || candidate.startsWith(`${prefix}/`) || candidate.startsWith(`${prefix}\\`)
@@ -53,50 +62,62 @@ const resolveContainerProjectsRoot = (): string | null => {
 
 const resolveProjectsRootHostOverride = (): string | null => resolveEnvValue("DOCKER_GIT_PROJECTS_ROOT_HOST")
 
-const resolveCurrentContainerId = (): string | null => {
+const resolveCurrentContainerId = (
+  cwd: string
+): Effect.Effect<string | null, never, CommandExecutor.CommandExecutor> => {
   const fromEnv = resolveEnvValue("HOSTNAME")
   if (fromEnv !== null) {
-    return fromEnv
+    return Effect.succeed(fromEnv)
   }
 
-  try {
-    const fromHostnameFile = readFileSync("/etc/hostname", "utf8").trim()
-    return fromHostnameFile.length > 0 ? fromHostnameFile : null
-  } catch {
-    return null
-  }
+  return runCommandCapture(
+    {
+      cwd,
+      command: "hostname",
+      args: []
+    },
+    [0],
+    () => new Error("hostname failed")
+  ).pipe(
+    Effect.map((value) => value.trim()),
+    Effect.orElseSucceed(() => ""),
+    Effect.map((value) => (value.length > 0 ? value : null))
+  )
 }
 
-const parseDockerInspectMounts = (raw: string): ReadonlyArray<DockerMountBinding> => {
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-    return parsed.flatMap((item) => {
-      if (typeof item !== "object" || item === null) {
+const parseDockerInspectMounts = (raw: string): ReadonlyArray<DockerMountBinding> =>
+  raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .flatMap((line) => {
+      const separator = line.indexOf("\t")
+      if (separator <= 0 || separator >= line.length - 1) {
         return []
       }
-      const source = Reflect.get(item, "Source")
-      const destination = Reflect.get(item, "Destination")
-      return typeof source === "string" && typeof destination === "string"
-        ? [{ source, destination }]
-        : []
+      const source = line.slice(0, separator).trim()
+      const destination = line.slice(separator + 1).trim()
+      if (source.length === 0 || destination.length === 0) {
+        return []
+      }
+      return [{ source, destination }]
     })
-  } catch {
-    return []
-  }
-}
 
 export const remapDockerBindHostPathFromMounts = (
   hostPath: string,
   mounts: ReadonlyArray<DockerMountBinding>
 ): string => {
-  const match = mounts
-    .filter((mount) => pathStartsWith(hostPath, mount.destination))
-    .sort((left, right) => right.destination.length - left.destination.length)[0]
+  let match: DockerMountBinding | null = null
+  for (const mount of mounts) {
+    if (!pathStartsWith(hostPath, mount.destination)) {
+      continue
+    }
+    if (match === null || mount.destination.length > match.destination.length) {
+      match = mount
+    }
+  }
 
-  if (match === undefined) {
+  if (match === null) {
     return hostPath
   }
 
@@ -117,7 +138,7 @@ export const resolveDockerVolumeHostPath = (
       }
     }
 
-    const containerId = resolveCurrentContainerId()
+    const containerId = yield* _(resolveCurrentContainerId(cwd))
     if (containerId === null) {
       return hostPath
     }
@@ -127,7 +148,12 @@ export const resolveDockerVolumeHostPath = (
         {
           cwd,
           command: "docker",
-          args: ["inspect", containerId, "--format", "{{json .Mounts}}"]
+          args: [
+            "inspect",
+            containerId,
+            "--format",
+            String.raw`{{range .Mounts}}{{println .Source "\t" .Destination}}{{end}}`
+          ]
         },
         [0],
         () => new Error("docker inspect current container failed")

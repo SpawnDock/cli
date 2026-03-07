@@ -137,13 +137,12 @@ const resolveClaudeAuthMethod = (
 const buildClaudeAuthEnv = (
   interactive: boolean,
   oauthToken: string | null = null
-): ReadonlyArray<string> =>
-  [
-    ...(interactive
-      ? [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`, "BROWSER=echo"]
-      : [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`]),
-    ...(oauthToken === null ? [] : [`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`])
-  ]
+): ReadonlyArray<string> => [
+  ...(interactive
+    ? [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`, "BROWSER=echo"]
+    : [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`]),
+  ...(oauthToken === null ? [] : [`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`])
+]
 
 const ensureClaudeOrchLayout = (
   cwd: string
