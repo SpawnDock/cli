@@ -1,7 +1,7 @@
 import { runDockerPsNames } from "@effect-template/lib/shell/docker"
 import { type InputCancelledError, InputReadError } from "@effect-template/lib/shell/errors"
 import { type AppError, renderError } from "@effect-template/lib/usecases/errors"
-import { listProjectItems } from "@effect-template/lib/usecases/projects"
+import { listProjectItems, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import { NodeContext } from "@effect/platform-node"
 import { Effect, pipe } from "effect"
 import { render, useApp, useInput } from "ink"
@@ -286,38 +286,34 @@ const TuiApp = () => {
 // CHANGE: guard against non-TTY environments (Docker without -t)
 // WHY: Ink calls setRawMode(true) on mount — without a TTY stdin does not support
 //      raw mode, causing an unhandled error and a hang in waitUntilExit().
-//      Fail fast with a descriptive error instead.
+//      Fall back to listProjectStatus in non-interactive environments.
 // QUOTE(ТЗ): "вечный цикл зависания на TUI из за ошибки Raw mode is not supported"
 // REF: issue-100
 // SOURCE: https://github.com/vadimdemedes/ink/#israwmodesupported
-// FORMAT THEOREM: ∀ env: ¬isTTY(env) → fail(InputReadError) ∧ ¬hang
+// FORMAT THEOREM: ∀ env: isTTY(env) → renderTui ∧ ¬isTTY(env) → listProjectStatus
 // INVARIANT: render() is only called when stdin.isTTY ∧ setRawMode ∈ stdin
-export const runMenu = pipe(
-  Effect.sync(() => {
-    resumeTui()
-  }),
-  Effect.zipRight(
-    Effect.suspend(() => {
-      if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== "function") {
-        return Effect.fail(
-          new InputReadError({
-            message:
-              "TUI requires a TTY. Attach a terminal: ssh into the container or use `docker run -it`."
-          })
-        )
-      }
-      return Effect.tryPromise({
+export const runMenu = Effect.suspend(() => {
+  if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== "function") {
+    return listProjectStatus
+  }
+
+  return pipe(
+    Effect.sync(() => {
+      resumeTui()
+    }),
+    Effect.zipRight(
+      Effect.tryPromise({
         try: () => render(React.createElement(TuiApp)).waitUntilExit(),
         catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
       })
-    })
-  ),
-  Effect.ensuring(
-    Effect.sync(() => {
-      leaveTui()
-    })
-  ),
-  Effect.asVoid
-)
+    ),
+    Effect.ensuring(
+      Effect.sync(() => {
+        leaveTui()
+      })
+    ),
+    Effect.asVoid
+  )
+})
 
 export type MenuError = AppError | InputCancelledError
