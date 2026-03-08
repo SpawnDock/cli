@@ -282,14 +282,34 @@ const TuiApp = () => {
 // EFFECT: Effect<void, AppError, FileSystem | Path | CommandExecutor>
 // INVARIANT: app exits only on Quit or ctrl+c
 // COMPLEXITY: O(1) per input
+//
+// CHANGE: guard against non-TTY environments (Docker without -t)
+// WHY: Ink calls setRawMode(true) on mount — without a TTY stdin does not support
+//      raw mode, causing an unhandled error and a hang in waitUntilExit().
+//      Fail fast with a descriptive error instead.
+// QUOTE(ТЗ): "вечный цикл зависания на TUI из за ошибки Raw mode is not supported"
+// REF: issue-100
+// SOURCE: https://github.com/vadimdemedes/ink/#israwmodesupported
+// FORMAT THEOREM: ∀ env: ¬isTTY(env) → fail(InputReadError) ∧ ¬hang
+// INVARIANT: render() is only called when stdin.isTTY ∧ setRawMode ∈ stdin
 export const runMenu = pipe(
   Effect.sync(() => {
     resumeTui()
   }),
   Effect.zipRight(
-    Effect.tryPromise({
-      try: () => render(React.createElement(TuiApp)).waitUntilExit(),
-      catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
+    Effect.suspend(() => {
+      if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== "function") {
+        return Effect.fail(
+          new InputReadError({
+            message:
+              "TUI requires a TTY. Attach a terminal: ssh into the container or use `docker run -it`."
+          })
+        )
+      }
+      return Effect.tryPromise({
+        try: () => render(React.createElement(TuiApp)).waitUntilExit(),
+        catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
+      })
     })
   ),
   Effect.ensuring(
