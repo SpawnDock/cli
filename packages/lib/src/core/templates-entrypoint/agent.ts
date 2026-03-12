@@ -54,7 +54,10 @@ const renderAgentAutoLaunchCommand = (
   config: TemplateConfig,
   mode: "claude" | "codex"
 ): string =>
-  String.raw`su - ${config.sshUser} -s /bin/bash -c "bash -lc '. /etc/profile 2>/dev/null || true; . \"$AGENT_ENV_FILE\" 2>/dev/null || true; cd \"$TARGET_DIR\" && ${renderAgentPromptCommand(mode)}'"`
+  String
+    .raw`su - ${config.sshUser} -s /bin/bash -c "bash -lc '. /etc/profile 2>/dev/null || true; . \"$AGENT_ENV_FILE\" 2>/dev/null || true; cd \"$TARGET_DIR\" && ${
+    renderAgentPromptCommand(mode)
+  }'"`
 
 const renderAgentModeBlock = (
   config: TemplateConfig,
