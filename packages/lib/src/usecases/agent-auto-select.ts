@@ -1,5 +1,3 @@
-import { randomInt } from "node:crypto"
-
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -131,5 +129,5 @@ export const resolveAutoAgentMode = (
       return "codex"
     }
 
-    return randomInt(0, 2) === 0 ? "claude" : "codex"
+    return process.hrtime.bigint() % 2n === 0n ? "claude" : "codex"
   })

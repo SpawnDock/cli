@@ -163,6 +163,24 @@ const parseInlineValueToken = (
   return applyCommandValueFlag(raw, flag, inlineValue)
 }
 
+const legacyAgentFlagError = (token: string): ParseError | null => {
+  if (token === "--claude") {
+    return {
+      _tag: "InvalidOption",
+      option: token,
+      reason: "use --auto=claude"
+    }
+  }
+  if (token === "--codex") {
+    return {
+      _tag: "InvalidOption",
+      option: token,
+      reason: "use --auto=codex"
+    }
+  }
+  return null
+}
+
 const parseRawOptionsStep = (
   args: ReadonlyArray<string>,
   index: number,
@@ -181,15 +199,9 @@ const parseRawOptionsStep = (
     return { _tag: "ok", raw: booleanApplied, nextIndex: index + 1 }
   }
 
-  if (token === "--claude" || token === "--codex") {
-    return {
-      _tag: "error",
-      error: {
-        _tag: "InvalidOption",
-        option: token,
-        reason: "use --auto=claude or --auto=codex"
-      }
-    }
+  const deprecatedAgentFlag = legacyAgentFlagError(token)
+  if (deprecatedAgentFlag !== null) {
+    return { _tag: "error", error: deprecatedAgentFlag }
   }
 
   if (!token.startsWith("-")) {
