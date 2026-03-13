@@ -5,29 +5,13 @@ import { Effect } from "effect"
 
 import type { AgentMode, ParseError, TemplateConfig } from "../core/domain.js"
 import { normalizeAccountLabel } from "./auth-helpers.js"
+import { hasNonEmptyFile } from "./auth-sync-helpers.js"
 
 const autoOptionError = (reason: string): ParseError => ({
   _tag: "InvalidOption",
   option: "--auto",
   reason
 })
-
-const isNonEmptyFile = (
-  fs: FileSystem.FileSystem,
-  filePath: string
-): Effect.Effect<boolean, PlatformError> =>
-  Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(filePath))
-    if (!exists) {
-      return false
-    }
-    const info = yield* _(fs.stat(filePath))
-    if (info.type !== "File") {
-      return false
-    }
-    const text = yield* _(fs.readFileString(filePath), Effect.orElseSucceed(() => ""))
-    return text.trim().length > 0
-  })
 
 const isRegularFile = (
   fs: FileSystem.FileSystem,
@@ -51,7 +35,7 @@ const hasCodexAuth = (
   const authPath = normalized === "default"
     ? `${rootPath}/auth.json`
     : `${rootPath}/${normalized}/auth.json`
-  return isNonEmptyFile(fs, authPath)
+  return hasNonEmptyFile(fs, authPath)
 }
 
 const resolveClaudeAccountPath = (rootPath: string, label: string | undefined): ReadonlyArray<string> => {
@@ -69,7 +53,7 @@ const hasClaudeAuth = (
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
     for (const accountPath of resolveClaudeAccountPath(rootPath, label)) {
-      const oauthToken = yield* _(isNonEmptyFile(fs, `${accountPath}/.oauth-token`))
+      const oauthToken = yield* _(hasNonEmptyFile(fs, `${accountPath}/.oauth-token`))
       if (oauthToken) {
         return true
       }
@@ -88,6 +72,53 @@ const hasClaudeAuth = (
     return false
   })
 
+const resolveClaudeRoot = (codexSharedAuthPath: string): string =>
+  `${codexSharedAuthPath.slice(0, codexSharedAuthPath.lastIndexOf("/"))}/claude`
+
+const resolveAvailableAgentAuth = (
+  fs: FileSystem.FileSystem,
+  config: Pick<TemplateConfig, "claudeAuthLabel" | "codexAuthLabel" | "codexSharedAuthPath">
+): Effect.Effect<{ readonly claudeAvailable: boolean; readonly codexAvailable: boolean }, PlatformError> =>
+  Effect.gen(function*(_) {
+    const claudeAvailable = yield* _(
+      hasClaudeAuth(fs, resolveClaudeRoot(config.codexSharedAuthPath), config.claudeAuthLabel)
+    )
+    const codexAvailable = yield* _(hasCodexAuth(fs, config.codexSharedAuthPath, config.codexAuthLabel))
+    return { claudeAvailable, codexAvailable }
+  })
+
+const resolveExplicitAutoAgentMode = (
+  available: { readonly claudeAvailable: boolean; readonly codexAvailable: boolean },
+  mode: AgentMode | undefined
+): Effect.Effect<AgentMode | undefined, ParseError> => {
+  if (mode === "claude") {
+    return available.claudeAvailable
+      ? Effect.succeed("claude")
+      : Effect.fail(autoOptionError("Claude auth not found"))
+  }
+  if (mode === "codex") {
+    return available.codexAvailable
+      ? Effect.succeed("codex")
+      : Effect.fail(autoOptionError("Codex auth not found"))
+  }
+  return Effect.sync(() => mode)
+}
+
+const pickRandomAutoAgentMode = (
+  available: { readonly claudeAvailable: boolean; readonly codexAvailable: boolean }
+): Effect.Effect<AgentMode, ParseError> => {
+  if (!available.claudeAvailable && !available.codexAvailable) {
+    return Effect.fail(autoOptionError("no Claude or Codex auth found"))
+  }
+  if (available.claudeAvailable && !available.codexAvailable) {
+    return Effect.succeed("claude")
+  }
+  if (!available.claudeAvailable && available.codexAvailable) {
+    return Effect.succeed("codex")
+  }
+  return Effect.sync(() => (process.hrtime.bigint() % 2n === 0n ? "claude" : "codex"))
+}
+
 export const resolveAutoAgentMode = (
   config: Pick<TemplateConfig, "agentAuto" | "agentMode" | "claudeAuthLabel" | "codexAuthLabel" | "codexSharedAuthPath">
 ): Effect.Effect<AgentMode | undefined, ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
@@ -98,36 +129,11 @@ export const resolveAutoAgentMode = (
       return config.agentMode
     }
 
-    if (config.agentMode === "claude") {
-      const claudeRoot = `${config.codexSharedAuthPath.slice(0, config.codexSharedAuthPath.lastIndexOf("/"))}/claude`
-      const available = yield* _(hasClaudeAuth(fs, claudeRoot, config.claudeAuthLabel))
-      if (!available) {
-        return yield* _(Effect.fail(autoOptionError("Claude auth not found")))
-      }
-      return "claude"
+    const available = yield* _(resolveAvailableAgentAuth(fs, config))
+    const explicitMode = yield* _(resolveExplicitAutoAgentMode(available, config.agentMode))
+    if (explicitMode !== undefined) {
+      return explicitMode
     }
 
-    if (config.agentMode === "codex") {
-      const available = yield* _(hasCodexAuth(fs, config.codexSharedAuthPath, config.codexAuthLabel))
-      if (!available) {
-        return yield* _(Effect.fail(autoOptionError("Codex auth not found")))
-      }
-      return "codex"
-    }
-
-    const claudeRoot = `${config.codexSharedAuthPath.slice(0, config.codexSharedAuthPath.lastIndexOf("/"))}/claude`
-    const claudeAvailable = yield* _(hasClaudeAuth(fs, claudeRoot, config.claudeAuthLabel))
-    const codexAvailable = yield* _(hasCodexAuth(fs, config.codexSharedAuthPath, config.codexAuthLabel))
-
-    if (!claudeAvailable && !codexAvailable) {
-      return yield* _(Effect.fail(autoOptionError("no Claude or Codex auth found")))
-    }
-    if (claudeAvailable && !codexAvailable) {
-      return "claude"
-    }
-    if (!claudeAvailable && codexAvailable) {
-      return "codex"
-    }
-
-    return process.hrtime.bigint() % 2n === 0n ? "claude" : "codex"
+    return yield* _(pickRandomAutoAgentMode(available))
   })

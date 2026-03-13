@@ -181,17 +181,34 @@ const legacyAgentFlagError = (token: string): ParseError | null => {
   return null
 }
 
-const parseRawOptionsStep = (
-  args: ReadonlyArray<string>,
-  index: number,
-  raw: RawOptions
+const toParseStep = (
+  parsed: Either.Either<RawOptions, ParseError>,
+  nextIndex: number
+): ParseRawOptionsStep =>
+  Either.isLeft(parsed)
+    ? { _tag: "error", error: parsed.left }
+    : { _tag: "ok", raw: parsed.right, nextIndex }
+
+const parseValueOptionStep = (
+  raw: RawOptions,
+  token: string,
+  value: string | undefined,
+  index: number
 ): ParseRawOptionsStep => {
-  const token = args[index] ?? ""
+  if (value === undefined) {
+    return { _tag: "error", error: { _tag: "MissingOptionValue", option: token } }
+  }
+  return toParseStep(applyCommandValueFlag(raw, token, value), index + 2)
+}
+
+const parseSpecialFlagStep = (
+  raw: RawOptions,
+  token: string,
+  index: number
+): ParseRawOptionsStep | null => {
   const inlineApplied = parseInlineValueToken(raw, token)
   if (inlineApplied !== null) {
-    return Either.isLeft(inlineApplied)
-      ? { _tag: "error", error: inlineApplied.left }
-      : { _tag: "ok", raw: inlineApplied.right, nextIndex: index + 1 }
+    return toParseStep(inlineApplied, index + 1)
   }
 
   const booleanApplied = applyCommandBooleanFlag(raw, token)
@@ -204,19 +221,25 @@ const parseRawOptionsStep = (
     return { _tag: "error", error: deprecatedAgentFlag }
   }
 
+  return null
+}
+
+const parseRawOptionsStep = (
+  args: ReadonlyArray<string>,
+  index: number,
+  raw: RawOptions
+): ParseRawOptionsStep => {
+  const token = args[index] ?? ""
+  const specialStep = parseSpecialFlagStep(raw, token, index)
+  if (specialStep !== null) {
+    return specialStep
+  }
+
   if (!token.startsWith("-")) {
     return { _tag: "error", error: { _tag: "UnexpectedArgument", value: token } }
   }
 
-  const value = args[index + 1]
-  if (value === undefined) {
-    return { _tag: "error", error: { _tag: "MissingOptionValue", option: token } }
-  }
-
-  const nextRaw = applyCommandValueFlag(raw, token, value)
-  return Either.isLeft(nextRaw)
-    ? { _tag: "error", error: nextRaw.left }
-    : { _tag: "ok", raw: nextRaw.right, nextIndex: index + 2 }
+  return parseValueOptionStep(raw, token, args[index + 1], index)
 }
 
 export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawOptions, ParseError> => {

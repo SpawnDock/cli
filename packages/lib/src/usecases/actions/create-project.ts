@@ -198,6 +198,31 @@ const maybeOpenSsh = (
     yield* _(openSshBestEffort(projectConfig, remoteCommand))
   }).pipe(Effect.asVoid)
 
+const resolveFinalAgentConfig = (
+  resolvedConfig: CreateCommand["config"]
+): Effect.Effect<CreateCommand["config"], ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const resolvedAgentMode = yield* _(resolveAutoAgentMode(resolvedConfig))
+    if (
+      (resolvedConfig.agentAuto ?? false) && resolvedConfig.agentMode === undefined && resolvedAgentMode !== undefined
+    ) {
+      yield* _(Effect.log(`Auto agent selected: ${resolvedAgentMode}`))
+    }
+    return resolvedAgentMode === undefined ? resolvedConfig : { ...resolvedConfig, agentMode: resolvedAgentMode }
+  })
+
+const maybeCleanupAfterAgent = (
+  waitForAgent: boolean,
+  resolvedOutDir: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    if (!waitForAgent) {
+      return
+    }
+    yield* _(Effect.log("Agent finished. Cleaning up container..."))
+    yield* _(runDockerDownCleanup(resolvedOutDir))
+  })
+
 const runCreateProject = (
   path: Path.Path,
   command: CreateCommand
@@ -211,15 +236,7 @@ const runCreateProject = (
     const resolvedOutDir = path.resolve(ctx.resolveRootPath(command.outDir))
 
     const resolvedConfig = yield* _(resolveCreateConfig(command, ctx, resolvedOutDir))
-    const resolvedAgentMode = yield* _(resolveAutoAgentMode(resolvedConfig))
-    if (
-      (resolvedConfig.agentAuto ?? false) && resolvedConfig.agentMode === undefined && resolvedAgentMode !== undefined
-    ) {
-      yield* _(Effect.log(`Auto agent selected: ${resolvedAgentMode}`))
-    }
-    const finalConfig = resolvedAgentMode === undefined
-      ? resolvedConfig
-      : { ...resolvedConfig, agentMode: resolvedAgentMode }
+    const finalConfig = yield* _(resolveFinalAgentConfig(resolvedConfig))
     const { globalConfig, projectConfig } = buildProjectConfigs(path, ctx.baseDir, resolvedOutDir, finalConfig)
 
     yield* _(migrateProjectOrchLayout(ctx.baseDir, globalConfig, ctx.resolveRootPath))
@@ -248,10 +265,7 @@ const runCreateProject = (
       yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
     }
 
-    if (waitForAgent) {
-      yield* _(Effect.log("Agent finished. Cleaning up container..."))
-      yield* _(runDockerDownCleanup(resolvedOutDir))
-    }
+    yield* _(maybeCleanupAfterAgent(waitForAgent, resolvedOutDir))
 
     yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(projectConfig.repoUrl)}`))
     yield* _(maybeOpenSsh(command, hasAgent, waitForAgent, projectConfig))
