@@ -1,5 +1,3 @@
-import { availableParallelism, totalmem } from "node:os"
-
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -13,6 +11,28 @@ import { resolveBaseDir } from "./paths.js"
 
 const ensureParentDir = (path: Path.Path, fs: FileSystem.FileSystem, filePath: string) =>
   fs.makeDirectory(path.dirname(filePath), { recursive: true })
+
+const fallbackHostResources = {
+  cpuCount: 1,
+  totalMemoryBytes: 1024 ** 3
+}
+
+const loadHostResources = (): Effect.Effect<
+  { readonly cpuCount: number; readonly totalMemoryBytes: number }
+> =>
+  Effect.tryPromise({
+    try: () =>
+      import("node:os").then((os) => ({
+        cpuCount: os.availableParallelism(),
+        totalMemoryBytes: os.totalmem()
+      })),
+    catch: (error) => new Error(String(error))
+  }).pipe(
+    Effect.match({
+      onFailure: () => fallbackHostResources,
+      onSuccess: (value) => value
+    })
+  )
 
 const isFileSpec = (spec: FileSpec): spec is Extract<FileSpec, { readonly _tag: "File" }> => spec._tag === "File"
 
@@ -108,10 +128,8 @@ export const writeProjectFiles = (
     yield* _(fs.makeDirectory(baseDir, { recursive: true }))
 
     const normalizedConfig = withDefaultResourceLimitIntent(config)
-    const composeResourceLimits = resolveComposeResourceLimits(normalizedConfig, {
-      cpuCount: availableParallelism(),
-      totalMemoryBytes: totalmem()
-    })
+    const hostResources = yield* _(loadHostResources())
+    const composeResourceLimits = resolveComposeResourceLimits(normalizedConfig, hostResources)
     const specs = planFiles(normalizedConfig, composeResourceLimits)
     const created: Array<string> = []
     const existingFilePaths = force ? [] : yield* _(collectExistingFilePaths(fs, path, baseDir, specs))
