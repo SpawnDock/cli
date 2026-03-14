@@ -15,5 +15,4 @@ import { withDefaultResourceLimitIntent } from "../core/resource-limits.js"
 // COMPLEXITY: O(1)
 export const resolveTemplateResourceLimits = (
   template: TemplateConfig
-): Effect.Effect<TemplateConfig, never, never> =>
-  Effect.succeed(withDefaultResourceLimitIntent(template))
+): Effect.Effect<TemplateConfig> => Effect.succeed(withDefaultResourceLimitIntent(template))

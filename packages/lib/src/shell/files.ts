@@ -1,4 +1,4 @@
-import { availableParallelism, totalmem } from "os"
+import { availableParallelism, totalmem } from "node:os"
 
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"

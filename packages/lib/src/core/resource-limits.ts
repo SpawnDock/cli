@@ -21,8 +21,9 @@ const cpuAbsolutePattern = /^\d+(?:\.\d+)?$/u
 const ramAbsolutePattern = /^\d+(?:\.\d+)?(?:b|k|kb|m|mb|g|gb|t|tb)$/iu
 const percentPattern = /^\d+(?:\.\d+)?%$/u
 
-const normalizePrecision = (value: number): number =>
-  Math.round(value * precisionScale) / precisionScale
+const normalizePrecision = (value: number): number => Math.round(value * precisionScale) / precisionScale
+
+const missingLimit = (): string | undefined => undefined
 
 const parsePercent = (candidate: string): number | null => {
   if (!percentPattern.test(candidate)) {
@@ -58,7 +59,7 @@ export const normalizeCpuLimit = (
 ): Either.Either<string | undefined, ParseError> => {
   const candidate = value?.trim().toLowerCase() ?? ""
   if (candidate.length === 0) {
-    return Either.right(undefined)
+    return Either.right(missingLimit())
   }
   if (candidate.endsWith("%")) {
     return normalizePercent(candidate, "cpu")
@@ -87,7 +88,7 @@ export const normalizeRamLimit = (
 ): Either.Either<string | undefined, ParseError> => {
   const candidate = value?.trim().toLowerCase() ?? ""
   if (candidate.length === 0) {
-    return Either.right(undefined)
+    return Either.right(missingLimit())
   }
   if (candidate.endsWith("%")) {
     return normalizePercent(candidate, "ram")

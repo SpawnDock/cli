@@ -2,6 +2,7 @@ import { Either } from "effect"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
+import { nonEmpty, parseDockerNetworkMode, parseSshPort } from "./command-builders-shared.js"
 import { type RawOptions } from "./command-options.js"
 import {
   type AgentMode,
@@ -11,7 +12,6 @@ import {
   defaultTemplateConfig,
   deriveRepoPathParts,
   deriveRepoSlug,
-  isDockerNetworkMode,
   type ParseError,
   resolveRepoInput
 } from "./domain.js"
@@ -19,53 +19,7 @@ import { normalizeCpuLimit, normalizeRamLimit } from "./resource-limits.js"
 import { trimRightChar } from "./strings.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "./token-labels.js"
 
-const parsePort = (value: string): Either.Either<number, ParseError> => {
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed)) {
-    return Either.left({
-      _tag: "InvalidOption",
-      option: "--ssh-port",
-      reason: `expected integer, got: ${value}`
-    })
-  }
-  if (parsed < 1 || parsed > 65_535) {
-    return Either.left({
-      _tag: "InvalidOption",
-      option: "--ssh-port",
-      reason: "must be between 1 and 65535"
-    })
-  }
-  return Either.right(parsed)
-}
-
-const parseDockerNetworkMode = (
-  value: string | undefined
-): Either.Either<CreateCommand["config"]["dockerNetworkMode"], ParseError> => {
-  const candidate = value?.trim() ?? defaultTemplateConfig.dockerNetworkMode
-  if (isDockerNetworkMode(candidate)) {
-    return Either.right(candidate)
-  }
-  return Either.left({
-    _tag: "InvalidOption",
-    option: "--network-mode",
-    reason: "expected one of: shared, project"
-  })
-}
-
-export const nonEmpty = (
-  option: string,
-  value: string | undefined,
-  fallback?: string
-): Either.Either<string, ParseError> => {
-  const candidate = value?.trim() ?? fallback
-  if (candidate === undefined || candidate.length === 0) {
-    return Either.left({
-      _tag: "MissingRequiredOption",
-      option
-    })
-  }
-  return Either.right(candidate)
-}
+export { nonEmpty } from "./command-builders-shared.js"
 
 const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/")
 
@@ -98,7 +52,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
       nonEmpty("--target-dir", raw.targetDir, defaultTemplateConfig.targetDir)
     )
     const targetDir = expandContainerHome(sshUser, rawTargetDir)
-    const sshPort = yield* _(parsePort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
+    const sshPort = yield* _(parseSshPort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
 
     return { repoUrl, repoSlug, projectSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
   })
@@ -243,13 +197,13 @@ const buildTemplateConfig = ({
   claudeAuthLabel,
   codexAuthLabel,
   cpuLimit,
-  ramLimit,
   dockerNetworkMode,
   dockerSharedNetworkName,
   enableMcpPlaywright,
   gitTokenLabel,
   names,
   paths,
+  ramLimit,
   repo
 }: BuildTemplateConfigInput): CreateCommand["config"] => ({
   containerName: names.containerName,
