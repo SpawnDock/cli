@@ -114,17 +114,16 @@ if (!isRecord(nextSettings.security.folderTrust)) nextSettings.security.folderTr
 nextSettings.security.folderTrust.enabled = false
 nextSettings.approvalPolicy = "never"
 
-// Force auth method detection
+// Force auth method detection and correct placement in settings.json
 const settingsDir = path.dirname(settingsPath)
 const oauthPath = path.join(settingsDir, "oauth_creds.json")
 const apiKeyPath = path.join(settingsDir, "..", ".api-key")
 
+// Gemini CLI expects 'auth' at the same level as 'folderTrust' inside 'security'
 if (fs.existsSync(oauthPath)) {
-  if (!isRecord(nextSettings.security.auth)) nextSettings.security.auth = {}
-  nextSettings.security.auth.selectedType = "oauth-personal"
+  nextSettings.security.auth = { ...(isRecord(nextSettings.security.auth) ? nextSettings.security.auth : {}), selectedType: "oauth-personal" }
 } else if (fs.existsSync(apiKeyPath)) {
-  if (!isRecord(nextSettings.security.auth)) nextSettings.security.auth = {}
-  nextSettings.security.auth.selectedType = "api-key"
+  nextSettings.security.auth = { ...(isRecord(nextSettings.security.auth) ? nextSettings.security.auth : {}), selectedType: "api-key" }
 }
 
 if (JSON.stringify(settings) !== JSON.stringify(nextSettings)) {
