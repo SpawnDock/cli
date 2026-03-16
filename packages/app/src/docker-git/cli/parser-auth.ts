@@ -136,7 +136,8 @@ const buildGeminiCommand = (action: string, options: AuthOptions): Either.Either
       Either.right<AuthCommand>({
         _tag: "AuthGeminiLogin",
         label: options.label,
-        geminiAuthPath: options.geminiAuthPath
+        geminiAuthPath: options.geminiAuthPath,
+        isWeb: options.authWeb
       })),
     Match.when("status", () =>
       Either.right<AuthCommand>({

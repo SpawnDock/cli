@@ -2,10 +2,11 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Effect, pipe } from "effect"
 
 import type { AuthGeminiLoginCommand, AuthGeminiLogoutCommand, AuthGeminiStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
+import { runCommandExitCode } from "../shell/command-runner.js"
 import type { AuthError, CommandFailedError } from "../shell/errors.js"
 import { runGeminiOauthLoginWithPrompt } from "./auth-gemini-oauth.js"
 import { isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
@@ -282,9 +283,63 @@ export const authGeminiLoginOauth = (
     command,
     ({ accountPath, cwd, fs }) =>
       Effect.gen(function*(_) {
-        // Ensure .gemini directory exists for OAuth credentials storage
+        // Ensure .gemini directory exists and is empty for fresh OAuth credentials
         const credentialsDir = geminiCredentialsPath(accountPath)
+        yield* _(
+          fs.remove(credentialsDir, { recursive: true, force: true }).pipe(
+            Effect.catchAll(() =>
+              pipe(
+                runCommandExitCode({
+                  cwd,
+                  command: "docker",
+                  args: ["run", "--rm", "-v", `${accountPath}:/target`, "alpine", "rm", "-rf", "/target/.gemini"]
+                }),
+                Effect.asVoid,
+                Effect.catchAll(() => Effect.void)
+              )
+            )
+          ) as Effect.Effect<void, never, CommandExecutor.CommandExecutor>
+        )
         yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+
+        // Pre-create settings.json to disable folder trust prompt
+        const settingsPath = `${credentialsDir}/settings.json`
+        yield* _(
+          fs.writeFileString(
+            settingsPath,
+            JSON.stringify({
+              security: {
+                folderTrust: {
+                  enabled: false
+                }
+              }
+            })
+          )
+        )
+
+        // Pre-trust directories just in case the setting is ignored
+        const trustedFoldersPath = `${credentialsDir}/trustedFolders.json`
+        yield* _(
+          fs.writeFileString(
+            trustedFoldersPath,
+            JSON.stringify({
+              "/": "TRUST_FOLDER",
+              [geminiContainerHomeDir]: "TRUST_FOLDER"
+            })
+          )
+        )
+
+        // Pre-create projects.json to avoid ENOENT during rename within the container
+        const projectsPath = `${credentialsDir}/projects.json`
+        yield* _(
+          fs.writeFileString(
+            projectsPath,
+            JSON.stringify({
+              projects: {},
+              byPath: {}
+            })
+          )
+        )
 
         yield* _(
           runGeminiOauthLoginWithPrompt(cwd, accountPath, {

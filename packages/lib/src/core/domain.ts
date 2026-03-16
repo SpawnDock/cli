@@ -256,6 +256,7 @@ export interface AuthGeminiLoginCommand {
   readonly _tag: "AuthGeminiLogin"
   readonly label: string | null
   readonly geminiAuthPath: string
+  readonly isWeb: boolean
 }
 
 export interface AuthGeminiStatusCommand {

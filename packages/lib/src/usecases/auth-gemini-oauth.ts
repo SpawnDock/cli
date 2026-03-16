@@ -1,14 +1,15 @@
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import { Effect, pipe } from "effect"
+import { Deferred, Effect, pipe } from "effect"
 import * as Fiber from "effect/Fiber"
 import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 
 import { stripAnsi, writeChunkToFd } from "../shell/ansi-strip.js"
-import { resolveDefaultDockerUser, resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
+import { resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
 import { AuthError, CommandFailedError } from "../shell/errors.js"
+import { runCommandCapture, runCommandExitCode } from "../shell/command-runner.js"
 
 // CHANGE: add Gemini CLI OAuth authentication flow
 // WHY: enable Gemini CLI OAuth login in headless/Docker environments
@@ -31,7 +32,8 @@ const authSuccessPatterns = [
   "Authentication successful",
   "Successfully authenticated",
   "Logged in as",
-  "You are now logged in"
+  "You are now logged in",
+  "Logged in with Google"
 ]
 
 const authFailurePatterns = [
@@ -45,9 +47,24 @@ const authFailurePatterns = [
 const detectAuthResult = (output: string): GeminiAuthResult => {
   const normalized = stripAnsi(output).toLowerCase()
 
+  // Markers that indicate we are in the middle of or after an auth flow
+  const authInitiated = 
+    normalized.includes("please visit the following url") || 
+    normalized.includes("enter the authorization code") ||
+    normalized.includes("authorized the application")
+
   for (const pattern of authSuccessPatterns) {
     if (normalized.includes(pattern.toLowerCase())) {
-      return "success"
+      // If we saw auth initiation, any success pattern is a real success
+      if (authInitiated) {
+        return "success"
+      }
+      // If we didn't see initiation but see success, it might be the banner
+      // BUT if it's "Logged in with Google" and we're NOT in initiation, 
+      // it means we're ALREADY logged in, so we can also stop.
+      if (normalized.includes("logged in with google")) {
+        return "success"
+      }
     }
   }
 
@@ -63,7 +80,7 @@ const detectAuthResult = (output: string): GeminiAuthResult => {
 // Fixed port for Gemini CLI OAuth callback server
 // WHY: Using a fixed port allows Docker port forwarding to work
 // SOURCE: https://github.com/google-gemini/gemini-cli/issues/2040
-const geminiOauthCallbackPort = 38_751
+const defaultGeminiOauthCallbackPort = 38_751
 
 type DockerGeminiAuthSpec = {
   readonly cwd: string
@@ -78,18 +95,20 @@ const buildDockerGeminiAuthSpec = (
   cwd: string,
   accountPath: string,
   image: string,
-  containerPath: string
+  containerPath: string,
+  port: number
 ): DockerGeminiAuthSpec => ({
   cwd,
   image,
   hostPath: accountPath,
   containerPath,
-  callbackPort: geminiOauthCallbackPort,
+  callbackPort: port,
   env: [
     `HOME=${containerPath}`,
     "NO_BROWSER=true",
-    "GEMINI_CLI_NONINTERACTIVE=false",
-    `OAUTH_CALLBACK_PORT=${geminiOauthCallbackPort}`,
+    "GEMINI_CLI_NONINTERACTIVE=true",
+    "GEMINI_CLI_TRUST_ALL=true",
+    `OAUTH_CALLBACK_PORT=${port}`,
     "OAUTH_CALLBACK_HOST=0.0.0.0"
   ]
 })
@@ -105,10 +124,8 @@ const buildDockerGeminiAuthArgs = (spec: DockerGeminiAuthSpec): ReadonlyArray<st
     "-p",
     `${spec.callbackPort}:${spec.callbackPort}`
   ]
-  const dockerUser = resolveDefaultDockerUser()
-  if (dockerUser !== null) {
-    base.push("--user", dockerUser)
-  }
+  // NOTE: Running as root inside the auth container to ensure access to all internal paths.
+  // The mounted volume will still be accessible, and credentials will be written there.
   for (const entry of spec.env) {
     const trimmed = entry.trim()
     if (trimmed.length === 0) {
@@ -119,8 +136,40 @@ const buildDockerGeminiAuthArgs = (spec: DockerGeminiAuthSpec): ReadonlyArray<st
   // Run gemini CLI with --debug flag to ensure auth URL is shown
   // WHY: In some Gemini CLI versions, auth URL is only shown with --debug flag
   // SOURCE: https://github.com/google-gemini/gemini-cli/issues/13853
-  return [...base, spec.image, "gemini", "--debug"]
+  return [...base, spec.image, "gemini", "login", "--debug"]
 }
+
+const cleanupExistingContainers = (
+  port: number
+): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const out = yield* _(
+      runCommandCapture(
+        {
+          cwd: process.cwd(),
+          command: "docker",
+          args: ["ps", "-q", "--filter", `publish=${port}`]
+        },
+        [0],
+        () => new Error("docker ps failed")
+      ).pipe(
+        Effect.map((value) => value.trim()),
+        Effect.orElseSucceed(() => "")
+      )
+    )
+
+    const ids = out.split("\n").filter(Boolean)
+    if (ids.length > 0) {
+      yield* _(Effect.logInfo(`Cleaning up existing containers using port ${port}: ${ids.join(", ")}`))
+      yield* _(
+        runCommandExitCode({
+          cwd: process.cwd(),
+          command: "docker",
+          args: ["rm", "-f", ...ids]
+        }).pipe(Effect.catchAll(() => Effect.succeed(0)))
+      )
+    }
+  })
 
 const startDockerProcess = (
   executor: CommandExecutor.CommandExecutor,
@@ -139,7 +188,8 @@ const startDockerProcess = (
 const pumpDockerOutput = (
   source: Stream.Stream<Uint8Array, PlatformError>,
   fd: number,
-  resultBox: { value: GeminiAuthResult }
+  resultBox: { value: GeminiAuthResult },
+  authDeferred: Deferred.Deferred<void, never>
 ): Effect.Effect<void, PlatformError> => {
   const decoder = new TextDecoder("utf-8")
   let outputWindow = ""
@@ -147,8 +197,8 @@ const pumpDockerOutput = (
   return pipe(
     source,
     Stream.runForEach((chunk) =>
-      Effect.sync(() => {
-        writeChunkToFd(fd, chunk)
+      Effect.gen(function*(_) {
+        yield* _(Effect.sync(() => writeChunkToFd(fd, chunk)))
         outputWindow += decoder.decode(chunk)
         if (outputWindow.length > outputWindowSize) {
           outputWindow = outputWindow.slice(-outputWindowSize)
@@ -159,8 +209,11 @@ const pumpDockerOutput = (
         const result = detectAuthResult(outputWindow)
         if (result !== "pending") {
           resultBox.value = result
+          if (result === "success") {
+            yield* _(Deferred.succeed(authDeferred, void 0))
+          }
         }
-      }).pipe(Effect.asVoid)
+      })
     )
   ).pipe(Effect.asVoid)
 }
@@ -208,7 +261,7 @@ const resolveGeminiLoginResult = (
 // COMPLEXITY: O(1)
 const printOauthInstructions = (): Effect.Effect<void> =>
   Effect.sync(() => {
-    const port = geminiOauthCallbackPort
+    const port = defaultGeminiOauthCallbackPort
     process.stderr.write("\n")
     process.stderr.write("╔═══════════════════════════════════════════════════════════════════════════╗\n")
     process.stderr.write("║                    Gemini CLI OAuth Authentication                        ║\n")
@@ -241,20 +294,57 @@ export const runGeminiOauthLoginWithPrompt = (
 ): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.scoped(
     Effect.gen(function*(_) {
+      const port = defaultGeminiOauthCallbackPort
+
+      yield* _(cleanupExistingContainers(port))
       yield* _(printOauthInstructions())
 
       const executor = yield* _(CommandExecutor.CommandExecutor)
       const hostPath = yield* _(resolveDockerVolumeHostPath(cwd, accountPath))
-      const spec = buildDockerGeminiAuthSpec(cwd, hostPath, options.image, options.containerPath)
+      const spec = buildDockerGeminiAuthSpec(cwd, hostPath, options.image, options.containerPath, port)
       const proc = yield* _(startDockerProcess(executor, spec))
 
+      const authDeferred = yield* _(Deferred.make<void, never>())
       const resultBox: { value: GeminiAuthResult } = { value: "pending" }
-      const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, resultBox)))
-      const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, resultBox)))
+      const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, resultBox, authDeferred)))
+      const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, resultBox, authDeferred)))
 
-      const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
+      const exitCode = yield* _(
+        Effect.race(
+          proc.exitCode.pipe(Effect.map(Number)),
+          pipe(
+            Deferred.await(authDeferred),
+            Effect.flatMap(() => proc.kill()),
+            Effect.map(() => 0)
+          )
+        )
+      ) as Effect.Effect<number, PlatformError>
+
       yield* _(Fiber.join(stdoutFiber))
       yield* _(Fiber.join(stderrFiber))
+
+      // Fix permissions for all files created by root in the volume
+      yield* _(
+        runCommandExitCode({
+          cwd: process.cwd(),
+          command: "docker",
+          args: [
+            "run",
+            "--rm",
+            "-v",
+            `${hostPath}:${spec.containerPath}`,
+            "alpine",
+            "chmod",
+            "-R",
+            "777",
+            spec.containerPath
+          ]
+        }).pipe(
+          Effect.tapError((err) => Effect.logWarning(`Failed to fix Gemini auth permissions: ${err}`)),
+          Effect.catchAll(() => Effect.succeed(0))
+        )
+      )
+
       return yield* _(resolveGeminiLoginResult(resultBox.value, exitCode))
     })
   )

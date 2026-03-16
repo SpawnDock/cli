@@ -1,21 +1,18 @@
 import type { TemplateConfig } from "../domain.js"
 
 // CHANGE: add Gemini CLI entrypoint configuration
-// WHY: enable Gemini CLI authentication and configuration management similar to Claude/Codex
-// QUOTE(ТЗ): "Добавь поддержку gemini CLI"
+// WHY: enable Gemini CLI in Docker with automated auth, trust settings and MCP
 // REF: issue-146
-// SOURCE: https://geminicli.com/docs/get-started/authentication/
-// FORMAT THEOREM: forall config: renderEntrypointGeminiConfig(config) -> valid_bash_script
+// SOURCE: https://github.com/google-gemini/gemini-cli
+// FORMAT THEOREM: renderEntrypointGeminiConfig(config) -> valid_bash_script
 // PURITY: CORE
-// EFFECT: n/a
-// INVARIANT: GEMINI_API_KEY is loaded from shared auth volume
+// INVARIANT: configurations are isolated by GEMINI_AUTH_LABEL
 // COMPLEXITY: O(1)
 
 const geminiAuthRootContainerPath = (sshUser: string): string => `/home/${sshUser}/.docker-git/.orch/auth/gemini`
 
-const geminiAuthConfigTemplate = String
-  .raw`# Gemini CLI: expose GEMINI_API_KEY for SSH sessions (API key stored under ~/.docker-git/.orch/auth/gemini)
-GEMINI_LABEL_RAW="${"$"}{GEMINI_AUTH_LABEL:-}"
+const geminiAuthConfigTemplate = String.raw`# Gemini CLI: expose GEMINI_HOME for sessions (OAuth cache lives under ~/.docker-git/.orch/auth/gemini)
+GEMINI_LABEL_RAW="$GEMINI_AUTH_LABEL"
 if [[ -z "$GEMINI_LABEL_RAW" ]]; then
   GEMINI_LABEL_RAW="default"
 fi
@@ -28,29 +25,16 @@ if [[ -z "$GEMINI_LABEL_NORM" ]]; then
 fi
 
 GEMINI_AUTH_ROOT="__GEMINI_AUTH_ROOT__"
-GEMINI_AUTH_DIR="$GEMINI_AUTH_ROOT/$GEMINI_LABEL_NORM"
+GEMINI_CONFIG_DIR="$GEMINI_AUTH_ROOT/$GEMINI_LABEL_NORM"
 
-# Backward compatibility: if default auth is stored directly under gemini root, reuse it.
-if [[ "$GEMINI_LABEL_NORM" == "default" ]]; then
-  GEMINI_ROOT_ENV_FILE="$GEMINI_AUTH_ROOT/.env"
-  if [[ -f "$GEMINI_ROOT_ENV_FILE" ]]; then
-    GEMINI_AUTH_DIR="$GEMINI_AUTH_ROOT"
-  fi
-fi
-
-mkdir -p "$GEMINI_AUTH_DIR" || true
+mkdir -p "$GEMINI_CONFIG_DIR" || true
 GEMINI_HOME_DIR="__GEMINI_HOME_DIR__"
 mkdir -p "$GEMINI_HOME_DIR" || true
-
-GEMINI_API_KEY_FILE="$GEMINI_AUTH_DIR/.api-key"
-GEMINI_ENV_FILE="$GEMINI_AUTH_DIR/.env"
-GEMINI_HOME_ENV_FILE="$GEMINI_HOME_DIR/.env"
 
 docker_git_link_gemini_file() {
   local source_path="$1"
   local link_path="$2"
 
-  # Preserve user-created regular files and seed config dir once.
   if [[ -e "$link_path" && ! -L "$link_path" ]]; then
     if [[ -f "$link_path" && ! -e "$source_path" ]]; then
       cp "$link_path" "$source_path" || true
@@ -62,99 +46,164 @@ docker_git_link_gemini_file() {
   ln -sfn "$source_path" "$link_path" || true
 }
 
-# Link Gemini .env file from auth dir to home dir
-docker_git_link_gemini_file "$GEMINI_ENV_FILE" "$GEMINI_HOME_ENV_FILE"
+# Link .api-key, .env, and .gemini directory from central auth storage to container home
+docker_git_link_gemini_file "$GEMINI_CONFIG_DIR/.api-key" "$GEMINI_HOME_DIR/.api-key"
+docker_git_link_gemini_file "$GEMINI_CONFIG_DIR/.env" "$GEMINI_HOME_DIR/.env"
+docker_git_link_gemini_file "$GEMINI_CONFIG_DIR/.gemini" "$GEMINI_HOME_DIR/.gemini"
 
-docker_git_refresh_gemini_api_key() {
-  local api_key=""
-  # Try to read from dedicated API key file first
-  if [[ -f "$GEMINI_API_KEY_FILE" ]]; then
-    api_key="$(tr -d '\r\n' < "$GEMINI_API_KEY_FILE")"
-  fi
-  # Fall back to .env file
-  if [[ -z "$api_key" && -f "$GEMINI_ENV_FILE" ]]; then
-    api_key="$(grep -E '^GEMINI_API_KEY=' "$GEMINI_ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '\r\n' | sed "s/^['\"]//;s/['\"]$//")"
-  fi
-  if [[ -n "$api_key" ]]; then
-    export GEMINI_API_KEY="$api_key"
-  else
-    unset GEMINI_API_KEY || true
+docker_git_refresh_gemini_env() {
+  # If .api-key exists, export it as GEMINI_API_KEY
+  if [[ -f "$GEMINI_HOME_DIR/.api-key" ]]; then
+    export GEMINI_API_KEY="$(cat "$GEMINI_HOME_DIR/.api-key" | tr -d '\r\n')"
+  elif [[ -f "$GEMINI_HOME_DIR/.env" ]]; then
+    # Parse GEMINI_API_KEY from .env
+    API_KEY="$(grep "^GEMINI_API_KEY=" "$GEMINI_HOME_DIR/.env" | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//")"
+    if [[ -n "$API_KEY" ]]; then
+      export GEMINI_API_KEY="$API_KEY"
+    fi
   fi
 }
 
-docker_git_refresh_gemini_api_key`
+docker_git_refresh_gemini_env`
 
 const renderGeminiAuthConfig = (config: TemplateConfig): string =>
   geminiAuthConfigTemplate
     .replaceAll("__GEMINI_AUTH_ROOT__", geminiAuthRootContainerPath(config.sshUser))
-    .replaceAll("__GEMINI_HOME_DIR__", `/home/${config.sshUser}/.gemini`)
+    .replaceAll("__GEMINI_HOME_DIR__", config.geminiHome)
 
-const renderGeminiCliInstall = (): string =>
-  String.raw`# Gemini CLI: ensure CLI command exists (non-blocking startup self-heal)
-docker_git_ensure_gemini_cli() {
-  if command -v gemini >/dev/null 2>&1; then
-    return 0
-  fi
+const renderGeminiPermissionSettingsConfig = (config: TemplateConfig): string =>
+  String.raw`# Gemini CLI: keep trust settings in sync with docker-git defaults
+GEMINI_SETTINGS_DIR="${config.geminiHome}/.gemini"
+GEMINI_TRUST_SETTINGS_FILE="$GEMINI_SETTINGS_DIR/trustedFolders.json"
+GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_SETTINGS_DIR/settings.json"
 
-  if ! command -v npm >/dev/null 2>&1; then
-    return 0
-  fi
+mkdir -p "$GEMINI_SETTINGS_DIR" || true
 
-  NPM_ROOT="$(npm root -g 2>/dev/null || true)"
-  GEMINI_CLI_JS="$NPM_ROOT/@google/gemini-cli/build/cli.js"
-  if [[ -z "$NPM_ROOT" || ! -f "$GEMINI_CLI_JS" ]]; then
-    echo "docker-git: gemini cli.js not found under npm global root; skip shim restore" >&2
-    return 0
-  fi
-
-  # Rebuild a minimal shim when npm package exists but binary link is missing.
-  cat <<'EOF' > /usr/local/bin/gemini
-#!/usr/bin/env bash
-set -euo pipefail
-
-if ! command -v npm >/dev/null 2>&1; then
-  echo "gemini: npm is required but missing" >&2
-  exit 127
-fi
-
-NPM_ROOT="$(npm root -g 2>/dev/null || true)"
-GEMINI_CLI_JS="$NPM_ROOT/@google/gemini-cli/build/cli.js"
-if [[ -z "$NPM_ROOT" || ! -f "$GEMINI_CLI_JS" ]]; then
-  echo "gemini: cli.js not found under npm global root" >&2
-  exit 127
-fi
-
-exec node "$GEMINI_CLI_JS" "$@"
-EOF
-  chmod 0755 /usr/local/bin/gemini || true
-  ln -sf /usr/local/bin/gemini /usr/bin/gemini || true
+# Disable folder trust prompt in settings.json
+if [[ ! -f "$GEMINI_CONFIG_SETTINGS_FILE" ]]; then
+  cat <<'EOF' > "$GEMINI_CONFIG_SETTINGS_FILE"
+{
+  "security": {
+    "folderTrust": {
+      "enabled": false
+    }
+  }
 }
+EOF
+fi
 
-docker_git_ensure_gemini_cli`
+# Pre-trust important directories in trustedFolders.json
+cat <<'EOF' > "$GEMINI_TRUST_SETTINGS_FILE"
+{
+  "folders": [
+    {
+      "path": "/",
+      "trustState": "trusted",
+      "isRecursive": true
+    },
+    {
+      "path": "${config.geminiHome}",
+      "trustState": "trusted",
+      "isRecursive": true
+    },
+    {
+      "path": "${config.targetDir}",
+      "trustState": "trusted",
+      "isRecursive": true
+    }
+  ]
+}
+EOF
 
-const renderGeminiProfileSetup = (): string =>
+chown -R 1000:1000 "$GEMINI_SETTINGS_DIR" || true
+chmod 0600 "$GEMINI_TRUST_SETTINGS_FILE" "$GEMINI_CONFIG_SETTINGS_FILE" 2>/dev/null || true`
+
+const renderGeminiSudoConfig = (config: TemplateConfig): string =>
+  String.raw`# Gemini CLI: allow passwordless sudo for agent tasks
+if [[ -d /etc/sudoers.d ]]; then
+  echo "${config.sshUser} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/gemini-agent
+  chmod 0440 /etc/sudoers.d/gemini-agent
+fi`
+
+const renderGeminiMcpPlaywrightConfig = (config: TemplateConfig): string =>
+  String.raw`# Gemini CLI: keep Playwright MCP config in sync (TODO: Gemini CLI MCP integration format)
+# For now, Gemini CLI uses MCP via ~/.gemini/settings.json or command line.
+# We'll ensure it has the same Playwright capability as Claude/Codex once format is confirmed.`
+
+const renderGeminiProfileSetup = (config: TemplateConfig): string =>
   String.raw`GEMINI_PROFILE="/etc/profile.d/gemini-config.sh"
-printf "export GEMINI_AUTH_LABEL=%q\n" "${"$"}{GEMINI_AUTH_LABEL:-default}" > "$GEMINI_PROFILE"
+printf "export GEMINI_AUTH_LABEL=%q\n" "$GEMINI_AUTH_LABEL" > "$GEMINI_PROFILE"
+printf "export GEMINI_HOME=%q\n" "${config.geminiHome}" >> "$GEMINI_PROFILE"
 cat <<'EOF' >> "$GEMINI_PROFILE"
-GEMINI_API_KEY_FILE="${"$"}{GEMINI_AUTH_DIR:-$HOME/.gemini}/.api-key"
-GEMINI_ENV_FILE="${"$"}{GEMINI_AUTH_DIR:-$HOME/.gemini}/.env"
-if [[ -f "$GEMINI_API_KEY_FILE" ]]; then
-  export GEMINI_API_KEY="$(tr -d '\r\n' < "$GEMINI_API_KEY_FILE")"
-elif [[ -f "$GEMINI_ENV_FILE" ]]; then
-  GEMINI_KEY="$(grep -E '^GEMINI_API_KEY=' "$GEMINI_ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '\r\n' | sed "s/^['\"]//;s/['\"]$//")"
-  if [[ -n "$GEMINI_KEY" ]]; then
-    export GEMINI_API_KEY="$GEMINI_KEY"
-  fi
+if [[ -f "$GEMINI_HOME/.api-key" ]]; then
+  export GEMINI_API_KEY="$(cat "$GEMINI_HOME/.api-key" | tr -d '\r\n')"
 fi
 EOF
 chmod 0644 "$GEMINI_PROFILE" || true
 
-docker_git_upsert_ssh_env "GEMINI_AUTH_LABEL" "${"$"}{GEMINI_AUTH_LABEL:-default}"
+docker_git_upsert_ssh_env "GEMINI_AUTH_LABEL" "$GEMINI_AUTH_LABEL"
 docker_git_upsert_ssh_env "GEMINI_API_KEY" "${"$"}{GEMINI_API_KEY:-}"`
+
+const entrypointGeminiNoticeTemplate = String.raw`# Ensure global GEMINI.md exists for container context
+GEMINI_MD_PATH="__GEMINI_HOME__/GEMINI.md"
+GEMINI_WORKSPACE_CONTEXT="Контекст workspace: repository"
+if [[ "$REPO_REF" == issue-* ]]; then
+  ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
+  ISSUE_URL=""
+  if [[ "$REPO_URL" == https://github.com/* ]]; then
+    ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
+    if [[ -n "$ISSUE_REPO" ]]; then
+      ISSUE_URL="https://github.com/$ISSUE_REPO/issues/$ISSUE_ID"
+    fi
+  fi
+  if [[ -n "$ISSUE_URL" ]]; then
+    GEMINI_WORKSPACE_CONTEXT="Контекст workspace: issue #$ISSUE_ID ($ISSUE_URL)"
+  else
+    GEMINI_WORKSPACE_CONTEXT="Контекст workspace: issue #$ISSUE_ID"
+  fi
+elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
+  PR_ID="$(printf "%s" "$REPO_REF" | sed -nE 's#^refs/pull/([0-9]+)/head$#\1#p')"
+  PR_URL=""
+  if [[ "$REPO_URL" == https://github.com/* && -n "$PR_ID" ]]; then
+    PR_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
+    if [[ -n "$PR_REPO" ]]; then
+      PR_URL="https://github.com/$PR_REPO/pull/$PR_ID"
+    fi
+  fi
+  if [[ -n "$PR_ID" && -n "$PR_URL" ]]; then
+    GEMINI_WORKSPACE_CONTEXT="Контекст workspace: PR #$PR_ID ($PR_URL)"
+  elif [[ -n "$PR_ID" ]]; then
+    GEMINI_WORKSPACE_CONTEXT="Контекст workspace: PR #$PR_ID"
+  else
+    GEMINI_WORKSPACE_CONTEXT="Контекст workspace: pull request ($REPO_REF)"
+  fi
+fi
+
+cat <<EOF > "$GEMINI_MD_PATH"
+<!-- docker-git-managed:gemini-md -->
+Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, gemini, claude, opencode, oh-my-opencode, sshpass, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
+Рабочая папка проекта (git clone): __TARGET_DIR__
+Доступные workspace пути: __TARGET_DIR__
+\$GEMINI_WORKSPACE_CONTEXT
+Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
+Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
+Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+<!-- /docker-git-managed:gemini-md -->
+EOF
+chown 1000:1000 "$GEMINI_MD_PATH" || true`
+
+const renderEntrypointGeminiNotice = (config: TemplateConfig): string =>
+  entrypointGeminiNoticeTemplate
+    .replaceAll("__GEMINI_HOME__", config.geminiHome)
+    .replaceAll("__TARGET_DIR__", config.targetDir)
 
 export const renderEntrypointGeminiConfig = (config: TemplateConfig): string =>
   [
     renderGeminiAuthConfig(config),
-    renderGeminiCliInstall(),
-    renderGeminiProfileSetup()
+    renderGeminiPermissionSettingsConfig(config),
+    renderGeminiMcpPlaywrightConfig(config),
+    renderGeminiSudoConfig(config),
+    renderGeminiProfileSetup(config),
+    renderEntrypointGeminiNotice(config)
   ].join("\n\n")
