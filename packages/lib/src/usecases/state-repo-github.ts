@@ -123,7 +123,7 @@ export const ensureStateDotDockerGitRepo = (
       }
 
       yield* _(Effect.log(`Initializing state repository: ${cloneUrl}`))
-      yield* _(stateInit({ repoUrl: cloneUrl, repoRef: defaultStateRef }))
+      yield* _(stateInit({ repoUrl: cloneUrl, repoRef: defaultStateRef, token }))
     })
   ).pipe(
     Effect.matchEffect({
