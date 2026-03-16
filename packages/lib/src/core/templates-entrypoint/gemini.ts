@@ -92,10 +92,19 @@ GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_SETTINGS_DIR/settings.json"
 mkdir -p "$GEMINI_SETTINGS_DIR" || true
 
 # Disable folder trust prompt and enable auto-approval in settings.json
+# Detect auth method using Bash (more reliable in entrypoint)
+GEMINI_DETECTED_AUTH=""
+if [[ -f "$GEMINI_CONFIG_DIR/.gemini/oauth_creds.json" ]]; then
+  GEMINI_DETECTED_AUTH="oauth-personal"
+elif [[ -f "$GEMINI_CONFIG_DIR/.api-key" ]]; then
+  GEMINI_DETECTED_AUTH="api-key"
+fi
+
 GEMINI_SYNC_SETTINGS_SCRIPT=$(cat <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 const settingsPath = process.argv[2]
+const detectedAuth = process.argv[3]
 if (!settingsPath) process.exit(1)
 
 const isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v)
@@ -114,16 +123,8 @@ if (!isRecord(nextSettings.security.folderTrust)) nextSettings.security.folderTr
 nextSettings.security.folderTrust.enabled = false
 nextSettings.approvalPolicy = "never"
 
-// Force auth method detection and correct placement in settings.json
-// Check GEMINI_CONFIG_DIR directly as symlinks might not be ready
-const configDir = process.env.GEMINI_CONFIG_DIR || ""
-const hasOauth = configDir && fs.existsSync(path.join(configDir, ".gemini", "oauth_creds.json"))
-const hasApiKey = configDir && fs.existsSync(path.join(configDir, ".api-key"))
-
-if (hasOauth) {
-  nextSettings.security.auth = { ...(isRecord(nextSettings.security.auth) ? nextSettings.security.auth : {}), selectedType: "oauth-personal" }
-} else if (hasApiKey) {
-  nextSettings.security.auth = { ...(isRecord(nextSettings.security.auth) ? nextSettings.security.auth : {}), selectedType: "api-key" }
+if (detectedAuth) {
+  nextSettings.security.auth = { ...(isRecord(nextSettings.security.auth) ? nextSettings.security.auth : {}), selectedType: detectedAuth }
 }
 
 if (JSON.stringify(settings) !== JSON.stringify(nextSettings)) {
@@ -132,7 +133,7 @@ if (JSON.stringify(settings) !== JSON.stringify(nextSettings)) {
 }
 NODE
 )
-node -e "$GEMINI_SYNC_SETTINGS_SCRIPT" "$GEMINI_CONFIG_SETTINGS_FILE" || true
+node -e "$GEMINI_SYNC_SETTINGS_SCRIPT" "$GEMINI_CONFIG_SETTINGS_FILE" "$GEMINI_DETECTED_AUTH" || true
 
 # Pre-trust important directories in trustedFolders.json
 # Use flat mapping as required by recent Gemini CLI versions
