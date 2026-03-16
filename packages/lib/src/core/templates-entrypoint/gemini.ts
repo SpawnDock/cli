@@ -125,7 +125,7 @@ if [[ -d /etc/sudoers.d ]]; then
   chmod 0440 /etc/sudoers.d/gemini-agent
 fi`
 
-const renderGeminiMcpPlaywrightConfig = (config: TemplateConfig): string =>
+const renderGeminiMcpPlaywrightConfig = (_config: TemplateConfig): string =>
   String.raw`# Gemini CLI: keep Playwright MCP config in sync (TODO: Gemini CLI MCP integration format)
 # For now, Gemini CLI uses MCP via ~/.gemini/settings.json or command line.
 # We'll ensure it has the same Playwright capability as Claude/Codex once format is confirmed.`
