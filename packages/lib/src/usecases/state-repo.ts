@@ -211,24 +211,20 @@ const checkoutBranchBestEffort = (
     yield* _(Effect.logWarning(`git checkout -B ${repoRef} failed (exit ${checkoutExit})`))
   })
 
-// CHANGE: adopt remote history when dir is initialized from non-empty state
-// WHY: prevents creating a divergent root commit when remote already has history
+// CHANGE: align local history with remote when histories have no common ancestor
+// WHY: prevents creation of new branches when local repo was git-init'd without cloning (divergent root commits)
 // QUOTE(ТЗ): "у нас должна быть единая система облака в виде .docker-git. Новая ветка открывается только тогда когда не возможно исправить конфликт и сделать push в main"
 // REF: issue-141
 // PURITY: SHELL
 // EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
-// INVARIANT: only applies when HEAD has no commits (orphan branch); exits silently if remote has no history
+// INVARIANT: soft-resets only when merge-base finds no common ancestor; idempotent when histories are already related
+// COMPLEXITY: O(1) git operations
 const adoptRemoteHistoryIfOrphan = (
   root: string,
   repoRef: string
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    // Only act on orphan branches (no commits yet)
-    const revParseExit = yield* _(gitExitCode(root, ["rev-parse", "HEAD"], gitBaseEnv))
-    if (revParseExit === successExitCode) {
-      return
-    }
-    // Try to fetch remote history
+    // Fetch remote history first — required for merge-base and reset
     const fetchExit = yield* _(gitExitCode(root, ["fetch", "origin", repoRef], gitBaseEnv))
     if (fetchExit !== successExitCode) {
       yield* _(Effect.logWarning(`git fetch origin ${repoRef} failed (exit ${fetchExit}); starting fresh history`))
@@ -239,11 +235,27 @@ const adoptRemoteHistoryIfOrphan = (
       gitExitCode(root, ["show-ref", "--verify", "--quiet", `refs/remotes/${remoteRef}`], gitBaseEnv)
     )
     if (hasRemoteExit !== successExitCode) {
+      return // Remote branch does not exist yet (brand-new repo)
+    }
+
+    // Case 1: orphan branch (no local commits at all)
+    const revParseExit = yield* _(gitExitCode(root, ["rev-parse", "HEAD"], gitBaseEnv))
+    if (revParseExit !== successExitCode) {
+      yield* _(git(root, ["reset", "--soft", remoteRef], gitBaseEnv))
+      yield* _(Effect.log(`Adopted remote history from ${remoteRef}`))
       return
     }
-    // Soft-reset to remote history: local files become staged changes on top
+
+    // Case 2: local commits exist but histories share no common ancestor
+    // (e.g. git-init without cloning produced a divergent root commit)
+    const mergeBaseExit = yield* _(gitExitCode(root, ["merge-base", "HEAD", remoteRef], gitBaseEnv))
+    if (mergeBaseExit === successExitCode) {
+      return // Histories are related — normal rebase in stateSync will handle it
+    }
+
+    yield* _(Effect.logWarning(`Local history has no common ancestor with ${remoteRef}; realigning with remote`))
     yield* _(git(root, ["reset", "--soft", remoteRef], gitBaseEnv))
-    yield* _(Effect.log(`Adopted remote history from ${remoteRef}`))
+    yield* _(Effect.log(`Realigned with remote history from ${remoteRef}`))
   })
 
 export const stateInit = (
