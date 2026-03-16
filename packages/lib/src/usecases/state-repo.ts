@@ -211,6 +211,41 @@ const checkoutBranchBestEffort = (
     yield* _(Effect.logWarning(`git checkout -B ${repoRef} failed (exit ${checkoutExit})`))
   })
 
+// CHANGE: adopt remote history when dir is initialized from non-empty state
+// WHY: prevents creating a divergent root commit when remote already has history
+// QUOTE(ТЗ): "у нас должна быть единая система облака в виде .docker-git. Новая ветка открывается только тогда когда не возможно исправить конфликт и сделать push в main"
+// REF: issue-141
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: only applies when HEAD has no commits (orphan branch); exits silently if remote has no history
+const adoptRemoteHistoryIfOrphan = (
+  root: string,
+  repoRef: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    // Only act on orphan branches (no commits yet)
+    const revParseExit = yield* _(gitExitCode(root, ["rev-parse", "HEAD"], gitBaseEnv))
+    if (revParseExit === successExitCode) {
+      return
+    }
+    // Try to fetch remote history
+    const fetchExit = yield* _(gitExitCode(root, ["fetch", "origin", repoRef], gitBaseEnv))
+    if (fetchExit !== successExitCode) {
+      yield* _(Effect.logWarning(`git fetch origin ${repoRef} failed (exit ${fetchExit}); starting fresh history`))
+      return
+    }
+    const remoteRef = `origin/${repoRef}`
+    const hasRemoteExit = yield* _(
+      gitExitCode(root, ["show-ref", "--verify", "--quiet", `refs/remotes/${remoteRef}`], gitBaseEnv)
+    )
+    if (hasRemoteExit !== successExitCode) {
+      return
+    }
+    // Soft-reset to remote history: local files become staged changes on top
+    yield* _(git(root, ["reset", "--soft", remoteRef], gitBaseEnv))
+    yield* _(Effect.log(`Adopted remote history from ${remoteRef}`))
+  })
+
 export const stateInit = (
   input: StateInitInput
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
@@ -221,6 +256,7 @@ export const stateInit = (
 
     yield* _(initRepoIfNeeded(fs, path, root, input))
     yield* _(ensureOriginRemote(root, input.repoUrl))
+    yield* _(adoptRemoteHistoryIfOrphan(root, input.repoRef))
     yield* _(checkoutBranchBestEffort(root, input.repoRef))
     yield* _(ensureStateGitignore(fs, path, root))
 
