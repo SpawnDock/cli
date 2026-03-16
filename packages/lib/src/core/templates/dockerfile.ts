@@ -63,8 +63,8 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
 RUN gemini --version
-RUN printf "alias gemini='gemini --yolo'\n" >> /etc/bash.bashrc && \
-    printf "alias gemini='gemini --yolo'\n" >> /etc/zsh/zshrc`
+RUN echo "alias gemini='gemini --yolo'" >> /etc/bash.bashrc && \
+    echo "alias gemini='gemini --yolo'" >> /etc/zsh/zshrc`
 
 const renderDockerfileOpenCode = (): string =>
   `# Tooling: OpenCode (binary)
