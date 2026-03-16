@@ -317,7 +317,7 @@ export const authGeminiLoginOauth = (
           )
         )
 
-        // Pre-trust directories just in case the setting is ignored
+        // Pre-trust the container's home directory to skip interactive prompt
         const trustedFoldersPath = `${credentialsDir}/trustedFolders.json`
         yield* _(
           fs.writeFileString(
@@ -325,18 +325,6 @@ export const authGeminiLoginOauth = (
             JSON.stringify({
               "/": "TRUST_FOLDER",
               [geminiContainerHomeDir]: "TRUST_FOLDER"
-            })
-          )
-        )
-
-        // Pre-create projects.json to avoid ENOENT during rename within the container
-        const projectsPath = `${credentialsDir}/projects.json`
-        yield* _(
-          fs.writeFileString(
-            projectsPath,
-            JSON.stringify({
-              projects: {},
-              byPath: {}
             })
           )
         )

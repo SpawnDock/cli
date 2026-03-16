@@ -118,6 +118,15 @@ const nextSettings = {
   approvalPolicy: "never"
 }
 
+// Auto-detect auth method if not set
+if (!nextSettings.security.auth || !nextSettings.security.auth.selectedType) {
+  if (fs.existsSync(path.join(path.dirname(settingsPath), "oauth_creds.json"))) {
+    nextSettings.security.auth = { ...(nextSettings.security.auth || {}), selectedType: "oauth-personal" }
+  } else if (fs.existsSync(path.join(path.dirname(settingsPath), "..", ".api-key"))) {
+    nextSettings.security.auth = { ...(nextSettings.security.auth || {}), selectedType: "api-key" }
+  }
+}
+
 if (JSON.stringify(settings) !== JSON.stringify(nextSettings)) {
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
   fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + "\n")
