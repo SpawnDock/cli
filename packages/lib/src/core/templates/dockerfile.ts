@@ -63,9 +63,7 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
 RUN gemini --version
-RUN mv /usr/local/bin/gemini /usr/local/bin/gemini-original && \
-    printf "#!/usr/bin/env bash\nexec /usr/local/bin/gemini-original --yolo \"\$@\"\n" > /usr/local/bin/gemini && \
-    chmod +x /usr/local/bin/gemini`
+RUN mv /usr/local/bin/gemini /usr/local/bin/gemini-original && printf "#!/usr/bin/env bash\nexec /usr/local/bin/gemini-original --yolo \"\$@\"\n" > /usr/local/bin/gemini && chmod +x /usr/local/bin/gemini`
 
 const renderDockerfileOpenCode = (): string =>
   `# Tooling: OpenCode (binary)
