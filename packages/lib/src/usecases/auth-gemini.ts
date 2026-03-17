@@ -243,9 +243,60 @@ export const authGeminiLogin = (
           settingsPath,
           JSON.stringify(
             {
-              model: "gemini-3.1-pro-preview",
-              web_search: true,
-              security: { folderTrust: { enabled: false }, approvalPolicy: "never" }
+              model: {
+                name: "gemini-3.1-pro-preview-yolo",
+                compressionThreshold: 0.9,
+                disableLoopDetection: true
+              },
+              modelConfigs: {
+                customAliases: {
+                  "yolo-ultra": {
+                    "modelConfig": {
+                      "model": "gemini-3.1-pro-preview-yolo",
+                      "generateContentConfig": {
+                        "tools": [
+                          {
+                            "googleSearch": {}
+                          },
+                          {
+                            "urlContext": {}
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              general: {
+                defaultApprovalMode: "auto_edit"
+              },
+              tools: {
+                allowed: [
+                  "run_shell_command",
+                  "write_file",
+                  "googleSearch",
+                  "urlContext"
+                ]
+              },
+              sandbox: {
+                enabled: false
+              },
+              security: {
+                folderTrust: {
+                  enabled: false
+                },
+                auth: {
+                  selectedType: "oauth-personal"
+                },
+                disableYoloMode: false
+              },
+              mcpServers: {
+                playwright: {
+                  command: "docker-git-playwright-mcp",
+                  args: [],
+                  trust: true
+                }
+              }
             },
             null,
             2
@@ -315,11 +366,66 @@ const writeInitialSettings = (credentialsDir: string, fs: FileSystem.FileSystem)
     yield* _(
       fs.writeFileString(
         settingsPath,
-        JSON.stringify({
-          model: "gemini-3.1-pro-preview",
-          web_search: true,
-          security: { folderTrust: { enabled: false } }
-        })
+        JSON.stringify(
+          {
+            model: {
+              name: "gemini-3.1-pro-preview-yolo",
+              compressionThreshold: 0.9,
+              disableLoopDetection: true
+            },
+            modelConfigs: {
+              customAliases: {
+                "yolo-ultra": {
+                  "modelConfig": {
+                    "model": "gemini-3.1-pro-preview-yolo",
+                    "generateContentConfig": {
+                      "tools": [
+                        {
+                          "googleSearch": {}
+                        },
+                        {
+                          "urlContext": {}
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            general: {
+              defaultApprovalMode: "auto_edit"
+            },
+            tools: {
+              allowed: [
+                "run_shell_command",
+                "write_file",
+                "googleSearch",
+                "urlContext"
+              ]
+            },
+            sandbox: {
+              enabled: false
+            },
+            security: {
+              folderTrust: {
+                enabled: false
+              },
+              auth: {
+                selectedType: "oauth-personal"
+              },
+              disableYoloMode: false
+            },
+            mcpServers: {
+              playwright: {
+                command: "docker-git-playwright-mcp",
+                args: [],
+                trust: true
+              }
+            }
+          },
+          null,
+          2
+        ) + "\n"
       )
     )
 
@@ -362,12 +468,59 @@ export const authGeminiLoginOauth = (
             settingsPath,
             JSON.stringify(
               {
-                model: "gemini-3.1-pro-preview",
-                web_search: true,
+                model: {
+                  name: "gemini-3.1-pro-preview-yolo",
+                  compressionThreshold: 0.9,
+                  disableLoopDetection: true
+                },
+                modelConfigs: {
+                  customAliases: {
+                    "yolo-ultra": {
+                      "modelConfig": {
+                        "model": "gemini-3.1-pro-preview-yolo",
+                        "generateContentConfig": {
+                          "tools": [
+                            {
+                              "googleSearch": {}
+                            },
+                            {
+                              "urlContext": {}
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                general: {
+                  defaultApprovalMode: "auto_edit"
+                },
+                tools: {
+                  allowed: [
+                    "run_shell_command",
+                    "write_file",
+                    "googleSearch",
+                    "urlContext"
+                  ]
+                },
+                sandbox: {
+                  enabled: false
+                },
                 security: {
-                  folderTrust: { enabled: false },
-                  auth: { selectedType: "oauth-personal" },
-                  approvalPolicy: "never"
+                  folderTrust: {
+                    enabled: false
+                  },
+                  auth: {
+                    selectedType: "oauth-personal"
+                  },
+                  disableYoloMode: false
+                },
+                mcpServers: {
+                  playwright: {
+                    command: "docker-git-playwright-mcp",
+                    args: [],
+                    trust: true
+                  }
                 }
               },
               null,

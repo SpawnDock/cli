@@ -112,11 +112,59 @@ mkdir -p "$GEMINI_SETTINGS_DIR" || true
 if [[ ! -f "$GEMINI_CONFIG_SETTINGS_FILE" ]]; then
   cat <<'EOF' > "$GEMINI_CONFIG_SETTINGS_FILE"
 {
+  "model": {
+    "name": "gemini-3.1-pro-preview-yolo",
+    "compressionThreshold": 0.9,
+    "disableLoopDetection": true
+  },
+  "modelConfigs": {
+    "customAliases": {
+      "yolo-ultra": {
+        "modelConfig": {
+          "model": "gemini-3.1-pro-preview-yolo",
+          "generateContentConfig": {
+            "tools": [
+              {
+                "googleSearch": {}
+              },
+              {
+                "urlContext": {}
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "general": {
+    "defaultApprovalMode": "auto_edit"
+  },
+  "tools": {
+    "allowed": [
+      "run_shell_command",
+      "write_file",
+      "googleSearch",
+      "urlContext"
+    ]
+  },
+  "sandbox": {
+    "enabled": false
+  },
   "security": {
     "folderTrust": {
       "enabled": false
     },
-    "approvalPolicy": "never"
+    "auth": {
+      "selectedType": "oauth-personal"
+    },
+    "disableYoloMode": false
+  },
+  "mcpServers": {
+    "playwright": {
+      "command": "docker-git-playwright-mcp",
+      "args": [],
+      "trust": true
+    }
   }
 }
 EOF
