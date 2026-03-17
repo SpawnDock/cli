@@ -7,9 +7,9 @@ import {
   authGeminiLoginOauth,
   authGeminiLogout,
   authGithubLogin,
-  claudeAuthRoot,
-  geminiAuthRoot
+  claudeAuthRoot
 } from "@effect-template/lib/usecases/auth"
+import { geminiAuthRoot } from "@effect-template/lib/usecases/auth-gemini-helpers"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 
