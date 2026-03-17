@@ -3,8 +3,8 @@ import { Effect } from "effect"
 
 import type { AuthGeminiStatusCommand } from "../core/domain.js"
 import type { CommandFailedError } from "../shell/errors.js"
-import { resolveGeminiAuthMethod, withGeminiAuth } from "./auth-gemini.js"
-import type { GeminiRuntime } from "./auth-gemini.js"
+import { resolveGeminiAuthMethod, withGeminiAuth } from "./auth-gemini-helpers.js"
+import type { GeminiRuntime } from "./auth-gemini-helpers.js"
 
 // CHANGE: show Gemini CLI auth status for a given label
 // WHY: allow verifying API key/OAuth presence without exposing credentials

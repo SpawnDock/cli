@@ -3,8 +3,8 @@ import { Effect } from "effect"
 
 import type { AuthGeminiLogoutCommand } from "../core/domain.js"
 import type { CommandFailedError } from "../shell/errors.js"
-import { geminiApiKeyPath, geminiCredentialsPath, geminiEnvFilePath, withGeminiAuth } from "./auth-gemini.js"
-import type { GeminiRuntime } from "./auth-gemini.js"
+import { geminiApiKeyPath, geminiCredentialsPath, geminiEnvFilePath, withGeminiAuth } from "./auth-gemini-helpers.js"
+import type { GeminiRuntime } from "./auth-gemini-helpers.js"
 import { normalizeAccountLabel } from "./auth-helpers.js"
 import { autoSyncState } from "./state-repo.js"
 

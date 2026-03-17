@@ -32,8 +32,7 @@ const authSuccessPatterns = [
   "Authentication successful",
   "Successfully authenticated",
   "Logged in as",
-  "You are now logged in",
-  "Logged in with Google"
+  "You are now logged in"
 ]
 
 const authFailurePatterns = [
@@ -100,22 +99,27 @@ const buildDockerGeminiAuthSpec = (
     "NO_BROWSER=true",
     "GEMINI_CLI_NONINTERACTIVE=true",
     "GEMINI_CLI_TRUST_ALL=true",
+    "GEMINI_DISABLE_UPDATE_CHECK=true",
     `OAUTH_CALLBACK_PORT=${port}`,
     "OAUTH_CALLBACK_HOST=0.0.0.0"
   ]
 })
-
-const buildDockerGeminiAuthArgs = (spec: DockerGeminiAuthSpec): ReadonlyArray<string> => {
+export const buildDockerGeminiAuthArgs = (spec: DockerGeminiAuthSpec): ReadonlyArray<string> => {
   const base: Array<string> = [
     "run",
     "--rm",
+    "--init",
     "-i",
     "-t",
     "-v",
     `${spec.hostPath}:${spec.containerPath}`,
     "-p",
-    `${spec.callbackPort}:${spec.callbackPort}`
+    `${spec.callbackPort}:${spec.callbackPort}`,
+    "-w",
+    spec.containerPath
   ]
+  // ...
+
   // NOTE: Running as root inside the auth container to ensure access to all internal paths.
   // The mounted volume will still be accessible, and credentials will be written there.
   for (const entry of spec.env) {
@@ -125,10 +129,9 @@ const buildDockerGeminiAuthArgs = (spec: DockerGeminiAuthSpec): ReadonlyArray<st
     }
     base.push("-e", trimmed)
   }
-  // Run gemini CLI with --debug flag to ensure auth URL is shown
-  // WHY: In some Gemini CLI versions, auth URL is only shown with --debug flag
-  // SOURCE: https://github.com/google-gemini/gemini-cli/issues/13853
-  return [...base, spec.image, "gemini", "login", "--debug"]
+  // Run gemini mcp list with --debug flag to ensure auth URL is shown
+  // WHY: In some Gemini CLI versions, auth URL is only shown with --debug flag, and 'login' is no longer a command
+  return [...base, spec.image, "gemini", "mcp", "list", "--debug"]
 }
 
 const cleanupExistingContainers = (
@@ -328,14 +331,15 @@ export const runGeminiOauthLoginWithPrompt = (
           proc.exitCode.pipe(Effect.map(Number)),
           pipe(
             Deferred.await(authDeferred),
+            Effect.delay("500 millis"),
             Effect.flatMap(() => proc.kill()),
             Effect.map(() => 0)
           )
         )
       )
 
-      yield* _(Fiber.join(stdoutFiber))
-      yield* _(Fiber.join(stderrFiber))
+      yield* _(Fiber.interrupt(stdoutFiber))
+      yield* _(Fiber.interrupt(stderrFiber))
 
       // Fix permissions for all files created by root in the volume
       yield* _(fixGeminiAuthPermissions(hostPath, spec.containerPath))
