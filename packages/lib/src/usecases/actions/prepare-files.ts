@@ -46,6 +46,45 @@ const ensureFileReady = (
     return "exists"
   })
 
+const appendKeyIfMissing = (
+  fs: FileSystem.FileSystem,
+  resolved: string,
+  source: string,
+  desiredContents: string
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const currentContents = yield* _(fs.readFileString(resolved))
+    const currentLines = currentContents
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+
+    if (currentLines.includes(desiredContents)) {
+      return
+    }
+
+    const normalizedCurrent = currentContents.trimEnd()
+    const nextContents = normalizedCurrent.length === 0
+      ? `${desiredContents}\n`
+      : `${normalizedCurrent}\n${desiredContents}\n`
+
+    yield* _(fs.writeFileString(resolved, nextContents))
+    yield* _(Effect.log(`Authorized keys appended from ${source} to ${resolved}`))
+  })
+
+const resolveAuthorizedKeysSource = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  cwd: string
+): Effect.Effect<string | null, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const sshPrivateKey = yield* _(findSshPrivateKey(fs, path, cwd))
+    const matchingPublicKey = sshPrivateKey === null ? null : yield* _(findExistingPath(fs, `${sshPrivateKey}.pub`))
+    return matchingPublicKey === null
+      ? yield* _(findAuthorizedKeysSource(fs, path, cwd))
+      : matchingPublicKey
+  })
+
 const ensureAuthorizedKeys = (
   baseDir: string,
   authorizedKeysPath: string
@@ -63,14 +102,7 @@ const ensureAuthorizedKeys = (
         )
       )
 
-      const sshPrivateKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
-      const matchingPublicKey =
-        sshPrivateKey === null ? null : yield* _(findExistingPath(fs, `${sshPrivateKey}.pub`))
-      const source = yield* _(
-        matchingPublicKey === null
-          ? findAuthorizedKeysSource(fs, path, process.cwd())
-          : Effect.succeed(matchingPublicKey)
-      )
+      const source = yield* _(resolveAuthorizedKeysSource(fs, path, process.cwd()))
       if (source === null) {
         yield* _(
           Effect.logError(
@@ -87,28 +119,9 @@ const ensureAuthorizedKeys = (
       }
 
       if (state === "exists") {
-        if (resolved !== managedDefaultAuthorizedKeys) {
-          return
+        if (resolved === managedDefaultAuthorizedKeys) {
+          yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
         }
-
-        const currentContents = yield* _(fs.readFileString(resolved))
-        const currentLines = currentContents
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-
-        if (currentLines.includes(desiredContents)) {
-          return
-        }
-
-        const normalizedCurrent = currentContents.trimEnd()
-        const nextContents =
-          normalizedCurrent.length === 0
-            ? `${desiredContents}\n`
-            : `${normalizedCurrent}\n${desiredContents}\n`
-
-        yield* _(fs.writeFileString(resolved, nextContents))
-        yield* _(Effect.log(`Authorized keys appended from ${source} to ${resolved}`))
         return
       }
 
