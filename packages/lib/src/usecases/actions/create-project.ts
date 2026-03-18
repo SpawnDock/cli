@@ -263,6 +263,19 @@ const runCreateProject = (
     const hasAgent = finalConfig.agentMode !== undefined
     const waitForAgent = hasAgent && (finalConfig.agentAuto ?? false)
 
+    // CHANGE: run autoSyncState before docker compose up to prevent bind-mount inode invalidation
+    // WHY: git reset --hard in autoSyncState deletes and recreates .orch/auth/codex; if docker is
+    //      already running with a bind-mount on that directory, the old inode becomes unreachable
+    //      inside the container — codex fails with "No such file or directory"
+    // QUOTE(ТЗ): n/a
+    // REF: issue-158
+    // SOURCE: n/a
+    // FORMAT THEOREM: ∀p: synced(p) ∧ stable_inode(.orch/auth/codex, p) → valid_mount(docker_up(p))
+    // PURITY: SHELL
+    // EFFECT: Effect<void, never, StateRepoEnv>
+    // INVARIANT: .orch/auth/codex inode is stable when docker compose up runs
+    // COMPLEXITY: O(git_sync) before O(docker_up)
+    yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(projectConfig.repoUrl)}`))
     yield* _(
       runDockerUpIfNeeded(resolvedOutDir, projectConfig, {
         runUp: command.runUp,
@@ -278,7 +291,6 @@ const runCreateProject = (
 
     yield* _(maybeCleanupAfterAgent(waitForAgent, resolvedOutDir))
 
-    yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(projectConfig.repoUrl)}`))
     yield* _(maybeOpenSsh(command, hasAgent, waitForAgent, projectConfig))
   }).pipe(Effect.asVoid)
 
