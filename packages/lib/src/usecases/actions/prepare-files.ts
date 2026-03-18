@@ -12,7 +12,13 @@ import {
   migrateLegacyOrchLayout,
   syncAuthArtifacts
 } from "../auth-sync.js"
-import { findAuthorizedKeysSource, resolveAuthorizedKeysPath } from "../path-helpers.js"
+import {
+  defaultProjectsRoot,
+  findAuthorizedKeysSource,
+  findExistingPath,
+  findSshPrivateKey,
+  resolveAuthorizedKeysPath
+} from "../path-helpers.js"
 import { withFsPathContext } from "../runtime.js"
 import { resolvePathFromBase } from "./paths.js"
 
@@ -47,6 +53,7 @@ const ensureAuthorizedKeys = (
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
       const resolved = resolveAuthorizedKeysPath(path, baseDir, authorizedKeysPath)
+      const managedDefaultAuthorizedKeys = path.join(defaultProjectsRoot(process.cwd()), "authorized_keys")
       const state = yield* _(
         ensureFileReady(
           fs,
@@ -55,17 +62,53 @@ const ensureAuthorizedKeys = (
             `Authorized keys was a directory, moved to ${backupPath}. Creating a file at ${resolvedPath}.`
         )
       )
-      if (state === "exists") {
-        return
-      }
 
-      const source = yield* _(findAuthorizedKeysSource(fs, path, process.cwd()))
+      const sshPrivateKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+      const matchingPublicKey =
+        sshPrivateKey === null ? null : yield* _(findExistingPath(fs, `${sshPrivateKey}.pub`))
+      const source = yield* _(
+        matchingPublicKey === null
+          ? findAuthorizedKeysSource(fs, path, process.cwd())
+          : Effect.succeed(matchingPublicKey)
+      )
       if (source === null) {
         yield* _(
           Effect.logError(
             `Authorized keys not found. Create ${resolved} with your public key to enable SSH.`
           )
         )
+        return
+      }
+
+      const desiredContents = (yield* _(fs.readFileString(source))).trim()
+      if (desiredContents.length === 0) {
+        yield* _(Effect.logWarning(`Authorized keys source ${source} is empty. Skipping SSH key sync.`))
+        return
+      }
+
+      if (state === "exists") {
+        if (resolved !== managedDefaultAuthorizedKeys) {
+          return
+        }
+
+        const currentContents = yield* _(fs.readFileString(resolved))
+        const currentLines = currentContents
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+
+        if (currentLines.includes(desiredContents)) {
+          return
+        }
+
+        const normalizedCurrent = currentContents.trimEnd()
+        const nextContents =
+          normalizedCurrent.length === 0
+            ? `${desiredContents}\n`
+            : `${normalizedCurrent}\n${desiredContents}\n`
+
+        yield* _(fs.writeFileString(resolved, nextContents))
+        yield* _(Effect.log(`Authorized keys appended from ${source} to ${resolved}`))
         return
       }
 
