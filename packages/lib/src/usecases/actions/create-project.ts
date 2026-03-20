@@ -11,6 +11,7 @@ import { ensureDockerDaemonAccess } from "../../shell/docker.js"
 import { CommandFailedError } from "../../shell/errors.js"
 import type {
   AgentFailedError,
+  AuthError,
   CloneFailedError,
   DockerAccessError,
   DockerCommandError,
@@ -21,6 +22,7 @@ import { logDockerAccessInfo } from "../access-log.js"
 import { resolveAutoAgentMode } from "../agent-auto-select.js"
 import { renderError } from "../errors.js"
 import { applyGithubForkConfig } from "../github-fork.js"
+import { validateGithubCloneAuthTokenPreflight } from "../github-token-preflight.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
 import { findSshPrivateKey } from "../path-helpers.js"
 import { buildSshCommand, getContainerIpIfInsideContainer } from "../projects-core.js"
@@ -38,6 +40,7 @@ type CreateProjectError =
   | FileExistsError
   | CloneFailedError
   | AgentFailedError
+  | AuthError
   | DockerAccessError
   | DockerCommandError
   | PortProbeError
@@ -66,15 +69,14 @@ const resolveRootedConfig = (command: CreateCommand, ctx: CreateContext): Create
 })
 
 const resolveCreateConfig = (
-  command: CreateCommand,
-  ctx: CreateContext,
+  rootedConfig: CreateCommand["config"],
   resolvedOutDir: string
 ): Effect.Effect<
   CreateCommand["config"],
   PortProbeError | PlatformError,
   FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > =>
-  resolveSshPort(resolveRootedConfig(command, ctx), resolvedOutDir).pipe(
+  resolveSshPort(rootedConfig, resolvedOutDir).pipe(
     Effect.flatMap((config) => applyGithubForkConfig(config)),
     Effect.flatMap((config) => resolveTemplateResourceLimits(config))
   )
@@ -245,8 +247,11 @@ const runCreateProject = (
 
     const ctx = makeCreateContext(path, process.cwd())
     const resolvedOutDir = path.resolve(ctx.resolveRootPath(command.outDir))
+    const rootedConfig = resolveRootedConfig(command, ctx)
 
-    const resolvedConfig = yield* _(resolveCreateConfig(command, ctx, resolvedOutDir))
+    yield* _(validateGithubCloneAuthTokenPreflight(rootedConfig))
+
+    const resolvedConfig = yield* _(resolveCreateConfig(rootedConfig, resolvedOutDir))
     const finalConfig = yield* _(resolveFinalAgentConfig(resolvedConfig))
     const { globalConfig, projectConfig } = buildProjectConfigs(path, ctx.baseDir, resolvedOutDir, finalConfig)
 
