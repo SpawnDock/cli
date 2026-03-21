@@ -1,7 +1,7 @@
 import { FetchHttpClient, HttpClient } from "@effect/platform"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
-import { Either, Effect } from "effect"
+import { Effect, Either } from "effect"
 
 const githubTokenValidationUrl = "https://api.github.com/user"
 
@@ -23,14 +23,15 @@ export type GithubTokenValidationResult = {
 const GithubUserSchema: Schema.Schema<GithubUser> = Schema.Struct({
   login: Schema.String
 })
+const GithubUserJsonSchema = Schema.parseJson(GithubUserSchema)
 
 const unknownGithubTokenValidationResult = (): GithubTokenValidationResult => ({
   status: "unknown",
   login: null
 })
 
-const decodeGithubUserLogin = (input: unknown): string | null =>
-  Either.match(ParseResult.decodeUnknownEither(GithubUserSchema)(input), {
+const decodeGithubUserLogin = (input: string): string | null =>
+  Either.match(ParseResult.decodeUnknownEither(GithubUserJsonSchema)(input), {
     onLeft: () => null,
     onRight: (user) => user.login
   })
@@ -72,7 +73,7 @@ export const validateGithubToken = (token: string): Effect.Effect<GithubTokenVal
       } satisfies GithubTokenValidationResult
     }
 
-    const body = yield* _(response.json)
+    const body = yield* _(response.text)
     return {
       status,
       login: decodeGithubUserLogin(body)
