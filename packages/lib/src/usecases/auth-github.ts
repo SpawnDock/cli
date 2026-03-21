@@ -125,15 +125,27 @@ const renderGithubTokenStatusLine = (entry: GithubTokenStatusEntry): string =>
     Match.when("valid", () =>
       entry.login === null
         ? `- ${entry.label}: valid (owner unavailable)`
-        : `- ${entry.label}: valid (owner: ${entry.login})`
-    ),
+        : `- ${entry.label}: valid (owner: ${entry.login})`),
     Match.when("invalid", () => `- ${entry.label}: invalid`),
     Match.when("unknown", () => `- ${entry.label}: unknown (validation unavailable)`),
     Match.exhaustive
   )
 
 const renderGithubTokenStatusReport = (entries: ReadonlyArray<GithubTokenStatusEntry>): string =>
-  [`GitHub tokens (${entries.length}):`, ...entries.map(renderGithubTokenStatusLine)].join("\n")
+  [`GitHub tokens (${entries.length}):`, ...entries.map((entry) => renderGithubTokenStatusLine(entry))].join("\n")
+
+const validateGithubTokenEntry = (
+  entry: GithubTokenEntry
+): Effect.Effect<GithubTokenStatusEntry> =>
+  validateGithubToken(entry.token).pipe(
+    Effect.map((validation) => ({
+      key: entry.key,
+      label: entry.label,
+      token: entry.token,
+      status: validation.status,
+      login: validation.login
+    }))
+  )
 
 const resolveGithubTokenFromGh = (
   cwd: string,
@@ -291,19 +303,7 @@ export const authGithubStatus = (
         return
       }
 
-      const statuses = yield* _(
-        Effect.forEach(tokens, (entry) =>
-          validateGithubToken(entry.token).pipe(
-            Effect.map((validation) => ({
-              key: entry.key,
-              label: entry.label,
-              token: entry.token,
-              status: validation.status,
-              login: validation.login
-            }))
-          )
-        )
-      )
+      const statuses = yield* _(Effect.all(tokens.map((entry) => validateGithubTokenEntry(entry))))
 
       yield* _(Effect.log(renderGithubTokenStatusReport(statuses)))
     }))
