@@ -1,0 +1,26 @@
+{
+  "name": "@spawn-dock/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal SpawnDock runtime launcher for bootstrapped TMA projects",
+  "type": "module",
+  "main": "dist/src/main.js",
+  "bin": {
+    "spawn-dock": "dist/src/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/src/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.96.0",
+    "@effect/platform-node": "^0.106.0",
+    "effect": "^3.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

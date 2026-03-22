@@ -7,7 +7,8 @@
   "workspaces": [
     "packages/api",
     "packages/app",
-    "packages/lib"
+    "packages/lib",
+    "packages/spawndock-cli"
   ],
   "scripts": {
     "setup:pre-commit-hook": "node scripts/setup-pre-commit-hook.js",

@@ -2,3 +2,4 @@ packages:
   - packages/api
   - packages/app
   - packages/lib
+  - packages/spawndock-cli
