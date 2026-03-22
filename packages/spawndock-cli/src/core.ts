@@ -97,8 +97,8 @@ export const buildRuntimeCommand = (
 
   if (runtime === "claude") {
     return {
-      command: "claude",
-      args: [],
+      command: "codex",
+      args: ["sandbox", "linux", "claude"],
       cwd: projectDir,
     }
   }
