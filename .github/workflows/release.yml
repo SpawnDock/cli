@@ -13,7 +13,7 @@ permissions:
   packages: write
 
 jobs:
-  release:
+  release-docker-git:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -25,6 +25,24 @@ jobs:
           branch: ${{ github.event.workflow_run.head_branch }}
           package_json_path: packages/app/package.json
           pnpm_filter: ./packages/app
+          bump_type: patch
+          publish_npm: true
+          publish_github_packages: true
+          skip_if_unchanged: true
+          cancel_on_no_changes: true
+
+  release-spawndock-cli:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ProverCoderAI/action-release@v1.0.17
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          npm_token: ${{ secrets.NPM_TOKEN }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          branch: ${{ github.event.workflow_run.head_branch }}
+          package_json_path: packages/spawndock-cli/package.json
+          pnpm_filter: ./packages/spawndock-cli
           bump_type: patch
           publish_npm: true
           publish_github_packages: true

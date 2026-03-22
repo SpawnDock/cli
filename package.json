@@ -12,13 +12,13 @@
   ],
   "scripts": {
     "setup:pre-commit-hook": "node scripts/setup-pre-commit-hook.js",
-    "build": "pnpm --filter ./packages/app build",
+    "build": "pnpm --filter ./packages/app build && pnpm --filter ./packages/spawndock-cli build",
     "api:build": "pnpm --filter ./packages/api build",
     "api:start": "pnpm --filter ./packages/api start",
     "api:dev": "pnpm --filter ./packages/api dev",
     "api:test": "pnpm --filter ./packages/api test",
     "api:typecheck": "pnpm --filter ./packages/api typecheck",
-    "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck",
+    "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck && pnpm --filter ./packages/spawndock-cli typecheck",
     "changeset": "changeset",
     "changeset-publish": "node -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
     "changeset-version": "changeset version",
@@ -34,8 +34,8 @@
     "lint": "pnpm --filter ./packages/app lint && pnpm --filter ./packages/lib lint",
     "lint:tests": "pnpm --filter ./packages/app lint:tests",
     "lint:effect": "pnpm --filter ./packages/app lint:effect && pnpm --filter ./packages/lib lint:effect",
-    "test": "pnpm --filter ./packages/app test && pnpm --filter ./packages/lib test",
-    "typecheck": "pnpm --filter ./packages/app typecheck && pnpm --filter ./packages/lib typecheck",
+    "test": "pnpm --filter ./packages/app test && pnpm --filter ./packages/lib test && pnpm --filter ./packages/spawndock-cli test",
+    "typecheck": "pnpm --filter ./packages/app typecheck && pnpm --filter ./packages/lib typecheck && pnpm --filter ./packages/spawndock-cli typecheck",
     "start": "pnpm --filter ./packages/app start"
   },
   "devDependencies": {

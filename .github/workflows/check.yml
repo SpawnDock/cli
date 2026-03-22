@@ -25,6 +25,8 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build (docker-git package)
         run: pnpm --filter ./packages/app build
+      - name: Build (SpawnDock CLI package)
+        run: pnpm --filter ./packages/spawndock-cli build
 
   types:
     name: Types
@@ -38,6 +40,8 @@ jobs:
         run: pnpm --filter ./packages/app check
       - name: Typecheck (lib)
         run: pnpm --filter ./packages/lib typecheck
+      - name: Typecheck (SpawnDock CLI)
+        run: pnpm --filter ./packages/spawndock-cli typecheck
 
   lint:
     name: Lint
@@ -73,6 +77,8 @@ jobs:
         run: pnpm --filter ./packages/app test
       - name: Test (lib)
         run: pnpm --filter ./packages/lib test
+      - name: Test (SpawnDock CLI)
+        run: pnpm --filter ./packages/spawndock-cli test
 
   lint-effect:
     name: Lint Effect-TS
