@@ -60,6 +60,5 @@ SpawnDock TMA-проектов.
 `spawndock.config.json`.
 
 Это намеренно минимальный launcher. Он фиксирует project root и запускает
-агент только из него; для `codex` дополнительно включает `workspace-write`
-sandbox. Для `opencode` это best-effort confinement по working directory, а не
-полный OS-level sandbox.
+агент только из него; `opencode` по умолчанию стартует через
+`codex sandbox linux`, а `codex` сам запускается с `workspace-write` sandbox.

@@ -46,8 +46,8 @@ describe("resolveRuntime", () => {
 describe("buildRuntimeCommand", () => {
   it("defaults opencode to the project directory", () => {
     expect(buildRuntimeCommand("opencode", "/tmp/project")).toEqual({
-      command: "opencode",
-      args: ["/tmp/project"],
+      command: "codex",
+      args: ["sandbox", "linux", "opencode", "/tmp/project"],
       cwd: "/tmp/project",
     })
   })

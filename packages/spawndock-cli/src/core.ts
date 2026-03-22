@@ -104,8 +104,8 @@ export const buildRuntimeCommand = (
   }
 
   return {
-    command: "opencode",
-    args: [projectDir],
+    command: "codex",
+    args: ["sandbox", "linux", "opencode", projectDir],
     cwd: projectDir,
   }
 }
