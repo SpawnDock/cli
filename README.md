@@ -48,3 +48,17 @@ docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force 
 ## Подробности
 
 `docker-git --help`
+
+## SpawnDock CLI
+
+В этом workspace также есть отдельный package `@spawn-dock/cli` для bootstrapped
+SpawnDock TMA-проектов.
+
+Он запускается внутри каталога, где уже есть `spawndock.config.json`, и по
+умолчанию стартует `opencode`. Runtime можно переопределить через
+`SPAWNDOCK_AGENT_RUNTIME=codex|claude|opencode` или через `agentRuntime` в
+`spawndock.config.json`.
+
+Это намеренно минимальный launcher. Он фиксирует project root и запускает
+агент только из него; `opencode` по умолчанию стартует через
+`codex sandbox linux`, а `codex` сам запускается с `workspace-write` sandbox.
