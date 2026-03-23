@@ -33,7 +33,8 @@ const downAllCommand: Command = { _tag: "DownAll" }
 // COMPLEXITY: O(n) where n = |args|
 const parseApplyAll = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> => {
   const activeOnly = args.includes("--active")
-  return Either.right({ _tag: "ApplyAll", activeOnly } as Command)
+  const command: Command = { _tag: "ApplyAll", activeOnly }
+  return Either.right(command)
 }
 
 const parseCreate = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> =>
