@@ -60,6 +60,7 @@ export type ProjectItem = {
   readonly envProjectPath: string
   readonly codexAuthPath: string
   readonly codexHome: string
+  readonly clonedOnHostname?: string | undefined
 }
 
 export type ProjectStatus = {
@@ -203,7 +204,8 @@ export const loadProjectItem = (
       envGlobalPath: resolvePathFromCwd(path, projectDir, template.envGlobalPath),
       envProjectPath: resolvePathFromCwd(path, projectDir, template.envProjectPath),
       codexAuthPath: resolvePathFromCwd(path, projectDir, template.codexAuthPath),
-      codexHome: template.codexHome
+      codexHome: template.codexHome,
+      clonedOnHostname: template.clonedOnHostname
     }
   })
 
@@ -277,7 +279,7 @@ export const formatComposeRows = (entries: ReadonlyArray<ComposePsRow>): string 
   return [header, ...lines].join("\n")
 }
 
-type ProjectIndex = {
+export type ProjectIndex = {
   readonly projectsRoot: string
   readonly configPaths: ReadonlyArray<string>
 }
