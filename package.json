@@ -20,7 +20,7 @@
     "api:typecheck": "pnpm --filter ./packages/api typecheck",
     "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck && pnpm --filter ./packages/spawndock-cli typecheck",
     "changeset": "changeset",
-    "changeset-publish": "node -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
+    "changeset-publish": "node -e \"if (!process.env.NPM_KEY) { console.log('Skipping publish: NPM_KEY is not set'); process.exit(0); }\" && changeset publish",
     "changeset-version": "changeset version",
     "clone": "pnpm --filter ./packages/app build && node packages/app/dist/main.js clone",
     "open": "pnpm --filter ./packages/app build && node packages/app/dist/main.js open",
