@@ -20,7 +20,7 @@ jobs:
       - uses: ProverCoderAI/action-release@v1.0.17
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          npm_token: ${{ secrets.NPM_TOKEN }}
+          npm_token: ${{ secrets.NPM_TOKEN || secrets.NPM_KEY }}
           ref: ${{ github.event.workflow_run.head_sha }}
           branch: ${{ github.event.workflow_run.head_branch }}
           package_json_path: packages/app/package.json
@@ -38,7 +38,7 @@ jobs:
       - uses: ProverCoderAI/action-release@v1.0.17
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          npm_token: ${{ secrets.NPM_TOKEN }}
+          npm_token: ${{ secrets.NPM_TOKEN || secrets.NPM_KEY }}
           ref: ${{ github.event.workflow_run.head_sha }}
           branch: ${{ github.event.workflow_run.head_branch }}
           package_json_path: packages/spawndock-cli/package.json
