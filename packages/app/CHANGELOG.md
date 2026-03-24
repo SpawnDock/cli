@@ -1,5 +1,11 @@
 # @spawn-dock/cli
 
+## 1.0.72
+
+### Patch Changes
+
+- [#18](https://github.com/SpawnDock/cli/pull/18) [`8f903b4`](https://github.com/SpawnDock/cli/commit/8f903b479a7ca5e9c6b66fbdfcf7621805781ee0) Thanks [@skulidropek](https://github.com/skulidropek)! - fix: retain effect peer dependencies in published package
+
 ## 1.0.71
 
 ### Patch Changes
