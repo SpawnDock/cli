@@ -1,6 +1,7 @@
 import { Either } from "effect"
 
-import type { Command, ParseError, SpawnCommand } from "@effect-template/lib/core/domain"
+import type { Command, ParseError } from "@effect-template/lib/core/domain"
+import type { SpawnCommand } from "@effect-template/lib/core/spawn-domain"
 
 import { parseRawOptions } from "./parser-options.js"
 

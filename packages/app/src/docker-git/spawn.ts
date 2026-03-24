@@ -8,9 +8,9 @@ import {
   type CreateCommand,
   defaultTemplateConfig,
   deriveRepoSlug,
-  type SpawnCommand,
   type TemplateConfig
 } from "@effect-template/lib/core/domain"
+import type { SpawnCommand } from "@effect-template/lib/core/spawn-domain"
 import { runCommandCapture, runCommandExitCode } from "@effect-template/lib/shell/command-runner"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
 import { CommandFailedError, SpawnProjectDirError, SpawnSetupError } from "@effect-template/lib/shell/errors"

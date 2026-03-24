@@ -1,4 +1,4 @@
-import type { SessionGistCommand } from "./session-gist-domain.js"
+import type { SessionGistCommand, SpawnCommand } from "./session-gist-domain.js"
 
 export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
@@ -286,12 +286,6 @@ export interface AuthGeminiLogoutCommand {
   readonly _tag: "AuthGeminiLogout"
   readonly label: string | null
   readonly geminiAuthPath: string
-}
-
-export interface SpawnCommand {
-  readonly _tag: "Spawn"
-  readonly token: string
-  readonly outDir: string
 }
 
 export type {
