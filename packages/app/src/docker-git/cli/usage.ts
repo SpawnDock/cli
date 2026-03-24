@@ -2,28 +2,28 @@ import { Match } from "effect"
 
 import type { ParseError } from "@effect-template/lib/core/domain"
 
-export const usageText = `docker-git menu
-docker-git spawn --token <pairing-token> [options]
-docker-git create [--repo-url <url>] [options]
-docker-git clone <url> [options]
-docker-git open [<url>] [options]
-docker-git apply [<url>] [options]
-docker-git mcp-playwright [<url>] [options]
-docker-git attach [<url>] [options]
-docker-git panes [<url>] [options]
-docker-git scrap <action> [<url>] [options]
-docker-git sessions [list] [<url>] [options]
-docker-git sessions kill <pid> [<url>] [options]
-docker-git sessions logs <pid> [<url>] [options]
-docker-git session-gists [list] [options]
-docker-git session-gists backup [<url>] [options]
-docker-git session-gists view <snapshot-ref>
-docker-git session-gists download <snapshot-ref> [options]
-docker-git ps
-docker-git apply-all [--active]
-docker-git down-all
-docker-git auth <provider> <action> [options]
-docker-git state <action> [options]
+export const usageText = `spawn-dock menu
+spawn-dock spawn --token <pairing-token> [options]
+spawn-dock create [--repo-url <url>] [options]
+spawn-dock clone <url> [options]
+spawn-dock open [<url>] [options]
+spawn-dock apply [<url>] [options]
+spawn-dock mcp-playwright [<url>] [options]
+spawn-dock attach [<url>] [options]
+spawn-dock panes [<url>] [options]
+spawn-dock scrap <action> [<url>] [options]
+spawn-dock sessions [list] [<url>] [options]
+spawn-dock sessions kill <pid> [<url>] [options]
+spawn-dock sessions logs <pid> [<url>] [options]
+spawn-dock session-gists [list] [options]
+spawn-dock session-gists backup [<url>] [options]
+spawn-dock session-gists view <snapshot-ref>
+spawn-dock session-gists download <snapshot-ref> [options]
+spawn-dock ps
+spawn-dock apply-all [--active]
+spawn-dock down-all
+spawn-dock auth <provider> <action> [options]
+spawn-dock state <action> [options]
 
 Commands:
   menu                Interactive menu (default when no args)
