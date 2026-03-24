@@ -1,5 +1,11 @@
 # @spawn-dock/cli
 
+## 1.0.71
+
+### Patch Changes
+
+- [#15](https://github.com/SpawnDock/cli/pull/15) [`6f7d203`](https://github.com/SpawnDock/cli/commit/6f7d20368213c9deea4fd0d667c462d304c39b03) Thanks [@skulidropek](https://github.com/skulidropek)! - fix: correctly include scripts directory in bundle and resolve paths for npx
+
 ## 1.0.70
 
 ### Patch Changes
