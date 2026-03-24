@@ -31,7 +31,7 @@ jobs:
           publish_npm: true
           publish_github_packages: true
           skip_if_unchanged: true
-          cancel_on_no_changes: true
+          cancel_on_no_changes: false
 
   release-spawndock-runtime:
     if: github.event.workflow_run.conclusion == 'success'
@@ -51,4 +51,4 @@ jobs:
           publish_npm: true
           publish_github_packages: true
           skip_if_unchanged: true
-          cancel_on_no_changes: true
+          cancel_on_no_changes: false
