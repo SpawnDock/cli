@@ -77,3 +77,11 @@ export class ScrapWipeRefusedError extends Data.TaggedError("ScrapWipeRefusedErr
   readonly targetDir: string
   readonly reason: string
 }> {}
+
+export class SpawnProjectDirError extends Data.TaggedError("SpawnProjectDirError")<{
+  readonly output: string
+}> {}
+
+export class SpawnSetupError extends Data.TaggedError("SpawnSetupError")<{
+  readonly exitCode: number
+}> {}

@@ -34,3 +34,5 @@ export type SessionGistCommand =
   | SessionGistListCommand
   | SessionGistViewCommand
   | SessionGistDownloadCommand
+
+export type { SpawnCommand } from "./spawn-domain.js"

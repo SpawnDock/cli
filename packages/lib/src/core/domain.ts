@@ -1,4 +1,4 @@
-import type { SessionGistCommand } from "./session-gist-domain.js"
+import type { SessionGistCommand, SpawnCommand } from "./session-gist-domain.js"
 
 export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
@@ -343,6 +343,7 @@ export type Command =
   | DownAllCommand
   | StateCommand
   | AuthCommand
+  | SpawnCommand
 
 // CHANGE: validate docker network mode values at the CLI/config boundary
 // WHY: keep compose network behavior explicit and type-safe
