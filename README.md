@@ -1,7 +1,7 @@
-# docker-git
+# spawn-dock
 
-`docker-git` creates a separate Docker environment for each repository, issue, or PR.
-By default, projects reside in `~/.docker-git`.
+`spawn-dock` creates a separate Docker environment for each repository, issue, or PR.
+By default, projects reside in `~/.spawn-dock`.
 
 ## Prerequisites
 
@@ -12,16 +12,16 @@ By default, projects reside in `~/.docker-git`.
 ## Installation
 
 ```bash
-npm i -g @prover-coder-ai/docker-git
-docker-git --help
+npm i -g @spawn-dock/cli
+spawn-dock --help
 ```
 
 ## Authentication
 
 ```bash
-docker-git auth github login --web
-docker-git auth codex login --web
-docker-git auth claude login --web
+spawn-dock auth github login --web
+spawn-dock auth codex login --web
+spawn-dock auth claude login --web
 ```
 
 ## Example
@@ -29,7 +29,7 @@ docker-git auth claude login --web
 You can pass a link to a repository, branch (`/tree/...`), issue, or PR.
 
 ```bash
-docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --mcp-playwright
+spawn-dock clone https://github.com/SpawnDock/cli/issues/122 --force --mcp-playwright
 ```
 
 - `--force` recreates the environment and removes the project's volumes.
@@ -38,7 +38,7 @@ docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force 
 Automatic agent launch:
 
 ```bash
-docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --auto
+spawn-dock clone https://github.com/SpawnDock/cli/issues/122 --force --auto
 ```
 
 - `--auto` selects Claude or Codex based on available authentication. If both are available, the choice is random.
@@ -47,7 +47,7 @@ docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force 
 
 ## Details
 
-`docker-git --help`
+`spawn-dock --help`
 
 ## SpawnDock CLI
 

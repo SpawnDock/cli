@@ -44,12 +44,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ProverCoderAI/effect-template.git"
+    "url": "git+https://github.com/SpawnDock/cli.git"
   },
   "bugs": {
-    "url": "https://github.com/ProverCoderAI/effect-template/issues"
+    "url": "https://github.com/SpawnDock/cli/issues"
   },
-  "homepage": "https://github.com/ProverCoderAI/effect-template#readme",
+  "homepage": "https://github.com/SpawnDock/cli#readme",
   "license": "ISC",
   "pnpm": {
     "ignoredBuiltDependencies": [

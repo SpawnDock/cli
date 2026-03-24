@@ -7,7 +7,7 @@ describe("api schemas", () => {
   it.effect("decodes create project payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(CreateProjectRequestSchema)({
-        repoUrl: "https://github.com/ProverCoderAI/docker-git",
+        repoUrl: "https://github.com/SpawnDock/cli",
         repoRef: "main",
         up: true,
         force: false
