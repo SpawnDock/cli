@@ -31,7 +31,7 @@ jobs:
           skip_if_unchanged: true
           cancel_on_no_changes: true
 
-  release-spawndock-cli:
+  release-spawndock-runtime:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -41,8 +41,8 @@ jobs:
           npm_token: ${{ secrets.NPM_KEY }}
           ref: ${{ github.event.workflow_run.head_sha }}
           branch: ${{ github.event.workflow_run.head_branch }}
-          package_json_path: packages/spawndock-cli/package.json
-          pnpm_filter: ./packages/spawndock-cli
+          package_json_path: packages/spawndock-runtime/package.json
+          pnpm_filter: ./packages/spawndock-runtime
           bump_type: patch
           publish_npm: true
           publish_github_packages: true
