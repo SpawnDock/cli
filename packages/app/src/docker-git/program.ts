@@ -48,6 +48,7 @@ import {
 } from "@effect-template/lib/usecases/terminal-sessions"
 import { Effect, Match, pipe } from "effect"
 import { readCommand } from "./cli/read-command.js"
+import { spawnProject } from "./spawn.js"
 import { attachTmux, listTmuxPanes } from "./tmux.js"
 
 import { runMenu } from "./menu.js"
@@ -87,6 +88,7 @@ type NonBaseCommand = Exclude<
   | { readonly _tag: "DownAll" }
   | { readonly _tag: "ApplyAll" }
   | { readonly _tag: "Menu" }
+  | { readonly _tag: "Spawn" }
 >
 
 const handleNonBaseCommand = (command: NonBaseCommand) =>
@@ -150,6 +152,7 @@ export const program = pipe(
       Match.when({ _tag: "DownAll" }, () => downAllDockerGitProjects),
       Match.when({ _tag: "ApplyAll" }, (cmd) => applyAllDockerGitProjects(cmd)),
       Match.when({ _tag: "Menu" }, () => runMenu),
+      Match.when({ _tag: "Spawn" }, (cmd) => spawnProject(cmd)),
       Match.orElse((cmd) => handleNonBaseCommand(cmd))
     )
   ),
@@ -163,6 +166,8 @@ export const program = pipe(
   Effect.catchTag("AuthError", logWarningAndExit),
   Effect.catchTag("AgentFailedError", logWarningAndExit),
   Effect.catchTag("CommandFailedError", logWarningAndExit),
+  Effect.catchTag("SpawnProjectDirError", logWarningAndExit),
+  Effect.catchTag("SpawnSetupError", logWarningAndExit),
   Effect.catchTag("ScrapArchiveNotFoundError", logErrorAndExit),
   Effect.catchTag("ScrapTargetDirUnsupportedError", logErrorAndExit),
   Effect.catchTag("ScrapWipeRefusedError", logErrorAndExit),

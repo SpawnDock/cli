@@ -1,0 +1,209 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
+import { Duration, Effect, pipe, Schedule } from "effect"
+
+import {
+  defaultTemplateConfig,
+  deriveRepoSlug,
+  type SpawnCommand,
+  type TemplateConfig
+} from "@effect-template/lib/core/domain"
+import { runCommandCapture, runCommandExitCode } from "@effect-template/lib/shell/command-runner"
+import { readProjectConfig } from "@effect-template/lib/shell/config"
+import {
+  CommandFailedError,
+  SpawnProjectDirError,
+  SpawnSetupError
+} from "@effect-template/lib/shell/errors"
+import { createProject } from "@effect-template/lib/usecases/actions"
+import { findSshPrivateKey } from "@effect-template/lib/usecases/path-helpers"
+import { getContainerIpIfInsideContainer } from "@effect-template/lib/usecases/projects-core"
+
+import { spawnAttachTmux } from "./tmux.js"
+
+const SPAWNDOCK_REPO_URL = "https://github.com/SpawnDock/tma-project"
+const SPAWNDOCK_REPO_REF = "main"
+
+const buildSshProbeArgs = (
+  template: TemplateConfig,
+  sshKey: string | null,
+  ipAddress?: string
+): ReadonlyArray<string> => {
+  const host = ipAddress ?? "localhost"
+  const port = ipAddress ? 22 : template.sshPort
+  const args: Array<string> = []
+  if (sshKey !== null) {
+    args.push("-i", sshKey)
+  }
+  args.push(
+    "-T",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=2",
+    "-o",
+    "ConnectionAttempts=1",
+    "-o",
+    "LogLevel=ERROR",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(port),
+    `${template.sshUser}@${host}`,
+    "true"
+  )
+  return args
+}
+
+const buildSshRunArgs = (
+  template: TemplateConfig,
+  sshKey: string | null,
+  remoteCommand: string,
+  ipAddress?: string
+): ReadonlyArray<string> => {
+  const host = ipAddress ?? "localhost"
+  const port = ipAddress ? 22 : template.sshPort
+  const args: Array<string> = []
+  if (sshKey !== null) {
+    args.push("-i", sshKey)
+  }
+  args.push(
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "LogLevel=ERROR",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(port),
+    `${template.sshUser}@${host}`,
+    remoteCommand
+  )
+  return args
+}
+
+const waitForSshReady = (
+  template: TemplateConfig,
+  sshKey: string | null,
+  ipAddress?: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const host = ipAddress ?? "localhost"
+  const port = ipAddress ? 22 : template.sshPort
+  const probe = Effect.gen(function*(_) {
+    const exitCode = yield* _(
+      runCommandExitCode({
+        cwd: process.cwd(),
+        command: "ssh",
+        args: buildSshProbeArgs(template, sshKey, ipAddress)
+      })
+    )
+    if (exitCode !== 0) {
+      return yield* _(Effect.fail(new CommandFailedError({ command: "ssh wait", exitCode })))
+    }
+  })
+
+  return pipe(
+    Effect.log(`Waiting for SSH on ${host}:${port} ...`),
+    Effect.zipRight(
+      Effect.retry(
+        probe,
+        pipe(
+          Schedule.spaced(Duration.seconds(2)),
+          Schedule.intersect(Schedule.recurs(30))
+        )
+      )
+    ),
+    Effect.tap(() => Effect.log("SSH is ready."))
+  )
+}
+
+const parseProjectDir = (output: string): string | null => {
+  const match = /SpawnDock project created at (.+)/.exec(output)
+  return match?.[1]?.trim() ?? null
+}
+
+const buildSpawnCreateCommand = (outDir: string) => {
+  const repoSlug = deriveRepoSlug(SPAWNDOCK_REPO_URL)
+  const containerName = `dg-${repoSlug}`
+  const serviceName = `dg-${repoSlug}`
+  const volumeName = `dg-${repoSlug}-home`
+
+  return {
+    _tag: "Create" as const,
+    config: {
+      ...defaultTemplateConfig,
+      repoUrl: SPAWNDOCK_REPO_URL,
+      repoRef: SPAWNDOCK_REPO_REF,
+      containerName,
+      serviceName,
+      volumeName
+    },
+    outDir,
+    runUp: true,
+    force: false,
+    forceEnv: false,
+    waitForClone: true,
+    openSsh: false
+  }
+}
+
+// CHANGE: orchestrate spawn-dock spawn — creates container, runs @spawn-dock/create, opens tmux+opencode
+// WHY: provide one-command bootstrap from a Telegram bot pairing token
+// REF: spawn-command
+// PURITY: SHELL
+// EFFECT: Effect<void, SpawnProjectDirError | SpawnSetupError | ..., CommandExecutor | FileSystem | Path>
+// INVARIANT: container is started before SSH connection; tmux session opens after successful bootstrap
+// COMPLEXITY: O(1) + docker + ssh
+export const spawnProject = (command: SpawnCommand) =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+
+    yield* _(Effect.log("Creating SpawnDock container..."))
+    const syntheticCreate = buildSpawnCreateCommand(command.outDir)
+    yield* _(createProject(syntheticCreate))
+
+    const resolvedOutDir = path.resolve(command.outDir)
+    const projectConfig = yield* _(readProjectConfig(resolvedOutDir))
+    const template = projectConfig.template
+
+    const ipAddress = yield* _(
+      getContainerIpIfInsideContainer(fs, process.cwd(), template.containerName).pipe(
+        Effect.map((ip): string | undefined => ip),
+        Effect.orElse(() => Effect.succeed<string | undefined>(undefined))
+      )
+    )
+
+    const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+
+    yield* _(waitForSshReady(template, sshKey, ipAddress))
+
+    const createCmd = `npx -y @spawn-dock/create@beta --token ${command.token}`
+    yield* _(Effect.log("Running @spawn-dock/create inside container..."))
+
+    const output = yield* _(
+      runCommandCapture(
+        {
+          cwd: process.cwd(),
+          command: "ssh",
+          args: buildSshRunArgs(template, sshKey, createCmd, ipAddress)
+        },
+        [0],
+        (exitCode) => new SpawnSetupError({ exitCode })
+      )
+    )
+
+    const projectDir = parseProjectDir(output)
+    if (projectDir === null) {
+      return yield* _(Effect.fail(new SpawnProjectDirError({ output })))
+    }
+
+    yield* _(Effect.log(`Project bootstrapped at ${projectDir}`))
+    yield* _(spawnAttachTmux(template, projectDir, sshKey))
+  })

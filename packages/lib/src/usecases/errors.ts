@@ -18,7 +18,9 @@ import type {
   ScrapArchiveInvalidError,
   ScrapArchiveNotFoundError,
   ScrapTargetDirUnsupportedError,
-  ScrapWipeRefusedError
+  ScrapWipeRefusedError,
+  SpawnProjectDirError,
+  SpawnSetupError
 } from "../shell/errors.js"
 
 export type AppError =
@@ -39,6 +41,8 @@ export type AppError =
   | PortProbeError
   | AuthError
   | CommandFailedError
+  | SpawnProjectDirError
+  | SpawnSetupError
   | PlatformError
 
 type NonParseError = Exclude<AppError, ParseError>
@@ -129,6 +133,19 @@ const renderPrimaryError = (error: NonParseError): string | null =>
         "Hint: re-run with --no-wipe, or set a narrower --target-dir when creating the project."
       ].join("\n")),
     Match.when({ _tag: "AuthError" }, ({ message }) => message),
+    Match.when(
+      { _tag: "SpawnProjectDirError" },
+      ({ output }) =>
+        [
+          "Failed to parse project directory from @spawn-dock/create output.",
+          `Hint: expected a line matching "SpawnDock project created at <dir>" in the output.`,
+          `Output:\n${output}`
+        ].join("\n")
+    ),
+    Match.when(
+      { _tag: "SpawnSetupError" },
+      ({ exitCode }) => `@spawn-dock/create failed with exit code ${exitCode}`
+    ),
     Match.orElse(() => null)
   )
 

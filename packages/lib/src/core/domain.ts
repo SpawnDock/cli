@@ -288,6 +288,12 @@ export interface AuthGeminiLogoutCommand {
   readonly geminiAuthPath: string
 }
 
+export interface SpawnCommand {
+  readonly _tag: "Spawn"
+  readonly token: string
+  readonly outDir: string
+}
+
 export type {
   SessionGistBackupCommand,
   SessionGistCommand,
@@ -343,6 +349,7 @@ export type Command =
   | DownAllCommand
   | StateCommand
   | AuthCommand
+  | SpawnCommand
 
 // CHANGE: validate docker network mode values at the CLI/config boundary
 // WHY: keep compose network behavior explicit and type-safe

@@ -3,6 +3,7 @@ import { Match } from "effect"
 import type { ParseError } from "@effect-template/lib/core/domain"
 
 export const usageText = `docker-git menu
+docker-git spawn --token <pairing-token> [options]
 docker-git create [--repo-url <url>] [options]
 docker-git clone <url> [options]
 docker-git open [<url>] [options]
@@ -26,6 +27,7 @@ docker-git state <action> [options]
 
 Commands:
   menu                Interactive menu (default when no args)
+  spawn               Create a SpawnDock workspace container, bootstrap with @spawn-dock/create, and open opencode — all in one command
   create, init        Generate docker development environment (repo URL optional)
   clone               Create + run container and clone repo
   open                Open existing docker-git project workspace
@@ -41,6 +43,10 @@ Commands:
   down-all            Stop all docker-git containers (docker compose down)
   auth                Manage GitHub/Codex/Claude Code auth for docker-git
   state               Manage docker-git state directory via git (sync across machines)
+
+Spawn options:
+  --token <token>   Pairing token from SpawnDock Telegram bot (required for spawn)
+  --out-dir <dir>   Output directory for spawn workspace (default: .spawn-dock/spawndock)
 
 Options:
   --repo-url <url>          Repository URL (create: optional; clone: required via positional arg or flag)
