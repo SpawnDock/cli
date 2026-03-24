@@ -240,30 +240,18 @@ export const listTmuxPanes = (
     }
   })
 
-// CHANGE: attach a tmux workspace after spawn-dock spawn bootstraps the container
-// WHY: open opencode agent inside the spawned container in one step
-// REF: spawn-command
-// PURITY: SHELL
-// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
-// INVARIANT: SSH pane is pre-loaded with cd + spawn-dock agent
-// COMPLEXITY: O(1)
-export const spawnAttachTmux = (
+const openTmuxWorkspace = (
   template: TemplateConfig,
-  projectDir: string,
-  sshKey: string | null
-): Effect.Effect<
-  void,
-  CommandFailedError | PlatformError,
-  CommandExecutor.CommandExecutor
-> =>
+  leftPaneCommand: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const repoDisplayName = formatRepoDisplayName(template.repoUrl)
     const refLabel = formatRepoRefLabel(template.repoRef)
     const statusRight =
       `SSH: ${template.sshUser}@localhost:${template.sshPort} | Repo: ${repoDisplayName} | Ref: ${refLabel} | Status: Running`
     const session = `dg-${deriveRepoSlug(template.repoUrl)}`
-
     const hasSessionCode = yield* _(runTmuxExitCode(["has-session", "-t", session]))
+
     if (hasSessionCode === 0) {
       const existingLayout = yield* _(readLayoutVersion(session))
       if (existingLayout === layoutVersion) {
@@ -274,26 +262,29 @@ export const spawnAttachTmux = (
       yield* _(runTmux(["kill-session", "-t", session]))
     }
 
+    yield* _(createLayout(session))
+    yield* _(configureSession(session, repoDisplayName, statusRight))
+    yield* _(setupPanes(session, leftPaneCommand, template.containerName))
+    yield* _(runTmux(["attach", "-t", session]))
+  })
+
+// CHANGE: attach a tmux workspace after spawn-dock spawn bootstraps the container
+// WHY: open opencode agent inside the spawned container in one step
+// REF: spawn-command
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: SSH pane is pre-loaded with cd + spawn-dock agent; delegates session lifecycle to openTmuxWorkspace
+// COMPLEXITY: O(1)
+export const spawnAttachTmux = (
+  template: TemplateConfig,
+  projectDir: string,
+  sshKey: string | null
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
     const keyArgs = sshKey === null ? "" : `-i ${sshKey} `
     const agentSshCommand =
       `ssh -tt ${keyArgs}-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${template.sshPort} ${template.sshUser}@localhost "cd '${projectDir}' && spawn-dock agent"`
-
-    yield* _(createLayout(session))
-    yield* _(configureSession(session, repoDisplayName, statusRight))
-
-    const leftPane = "0"
-    const bottomPane = "1"
-    const rightPane = "2"
-    yield* _(sendKeys(session, leftPane, agentSshCommand))
-    yield* _(sendKeys(session, rightPane, wrapBash(buildJobsCommand(template.containerName))))
-    yield* _(sendKeys(session, bottomPane, wrapBash(buildBottomBarCommand())))
-    yield* _(runTmux(["bind-key", "-n", "M-1", "select-pane", "-t", `${session}:0.${leftPane}`]))
-    yield* _(runTmux(["bind-key", "-n", "M-2", "select-pane", "-t", `${session}:0.${rightPane}`]))
-    yield* _(runTmux(["bind-key", "-n", "M-3", "select-pane", "-t", `${session}:0.${bottomPane}`]))
-    yield* _(runTmux(["bind-key", "-n", "M-d", "detach-client"]))
-    yield* _(runTmux(["bind-key", "-n", "M-s", "choose-tree", "-Z"]))
-    yield* _(runTmux(["select-pane", "-t", `${session}:0.${leftPane}`]))
-    yield* _(runTmux(["attach", "-t", session]))
+    yield* _(openTmuxWorkspace(template, agentSshCommand))
   })
 
 // CHANGE: attach a tmux workspace for a docker-git project
@@ -324,25 +315,5 @@ export const attachTmux = (
     const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
     const template = yield* _(runDockerComposeUpWithPortCheck(resolved))
     const sshCommand = buildSshCommand(template, sshKey)
-    const repoDisplayName = formatRepoDisplayName(template.repoUrl)
-    const refLabel = formatRepoRefLabel(template.repoRef)
-    const statusRight =
-      `SSH: ${template.sshUser}@localhost:${template.sshPort} | Repo: ${repoDisplayName} | Ref: ${refLabel} | Status: Running`
-    const session = `dg-${deriveRepoSlug(template.repoUrl)}`
-    const hasSessionCode = yield* _(runTmuxExitCode(["has-session", "-t", session]))
-
-    if (hasSessionCode === 0) {
-      const existingLayout = yield* _(readLayoutVersion(session))
-      if (existingLayout === layoutVersion) {
-        yield* _(runTmux(["attach", "-t", session]))
-        return
-      }
-      yield* _(Effect.logWarning(`tmux session ${session} uses an old layout; recreating.`))
-      yield* _(runTmux(["kill-session", "-t", session]))
-    }
-
-    yield* _(createLayout(session))
-    yield* _(configureSession(session, repoDisplayName, statusRight))
-    yield* _(setupPanes(session, sshCommand, template.containerName))
-    yield* _(runTmux(["attach", "-t", session]))
+    yield* _(openTmuxWorkspace(template, sshCommand))
   })

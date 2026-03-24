@@ -23,10 +23,12 @@ import { spawnAttachTmux } from "./tmux.js"
 const SPAWNDOCK_REPO_URL = "https://github.com/SpawnDock/tma-project"
 const SPAWNDOCK_REPO_REF = "main"
 
-const buildSshProbeArgs = (
+// remoteCommand = undefined → probe mode (ssh -T BatchMode + "true"), string → execute mode
+const buildSshArgs = (
   template: TemplateConfig,
   sshKey: string | null,
-  ipAddress?: string
+  ipAddress: string | undefined,
+  remoteCommand?: string
 ): ReadonlyArray<string> => {
   const host = ipAddress ?? "localhost"
   const port = ipAddress ? 22 : template.sshPort
@@ -34,39 +36,8 @@ const buildSshProbeArgs = (
   if (sshKey !== null) {
     args.push("-i", sshKey)
   }
-  args.push(
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "ConnectTimeout=2",
-    "-o",
-    "ConnectionAttempts=1",
-    "-o",
-    "LogLevel=ERROR",
-    "-o",
-    "StrictHostKeyChecking=no",
-    "-o",
-    "UserKnownHostsFile=/dev/null",
-    "-p",
-    String(port),
-    `${template.sshUser}@${host}`,
-    "true"
-  )
-  return args
-}
-
-const buildSshRunArgs = (
-  template: TemplateConfig,
-  sshKey: string | null,
-  remoteCommand: string,
-  ipAddress?: string
-): ReadonlyArray<string> => {
-  const host = ipAddress ?? "localhost"
-  const port = ipAddress ? 22 : template.sshPort
-  const args: Array<string> = []
-  if (sshKey !== null) {
-    args.push("-i", sshKey)
+  if (remoteCommand === undefined) {
+    args.push("-T", "-o", "ConnectTimeout=2", "-o", "ConnectionAttempts=1")
   }
   args.push(
     "-o",
@@ -80,7 +51,7 @@ const buildSshRunArgs = (
     "-p",
     String(port),
     `${template.sshUser}@${host}`,
-    remoteCommand
+    remoteCommand ?? "true"
   )
   return args
 }
@@ -97,7 +68,7 @@ const waitForSshReady = (
       runCommandExitCode({
         cwd: process.cwd(),
         command: "ssh",
-        args: buildSshProbeArgs(template, sshKey, ipAddress)
+        args: buildSshArgs(template, sshKey, ipAddress)
       })
     )
     if (exitCode !== 0) {
@@ -190,7 +161,7 @@ export const spawnProject = (command: SpawnCommand) =>
         {
           cwd: process.cwd(),
           command: "ssh",
-          args: buildSshRunArgs(template, sshKey, createCmd, ipAddress)
+          args: buildSshArgs(template, sshKey, ipAddress, createCmd)
         },
         [0],
         (exitCode) => new SpawnSetupError({ exitCode })
