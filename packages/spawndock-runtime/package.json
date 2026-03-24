@@ -1,6 +1,6 @@
 {
-  "name": "@spawn-dock/cli",
-  "version": "1.0.0",
+  "name": "@spawn-dock/runtime",
+  "version": "1.0.1",
   "private": false,
   "description": "Minimal SpawnDock runtime launcher for bootstrapped TMA projects",
   "type": "module",
@@ -10,7 +10,7 @@
     "README.md"
   ],
   "bin": {
-    "spawn-dock": "dist/src/main.js"
+    "spawn-dock-runtime": "dist/src/main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x dist/src/main.js",
