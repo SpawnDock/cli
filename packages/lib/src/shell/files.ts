@@ -10,6 +10,8 @@ import { type FileSpec, planFiles } from "../core/templates.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
 
+import { fileURLToPath } from "node:url"
+
 const ensureParentDir = (path: Path.Path, fs: FileSystem.FileSystem, filePath: string) =>
   fs.makeDirectory(path.dirname(filePath), { recursive: true })
 
@@ -116,11 +118,20 @@ const provisionDockerGitScripts = (
   baseDir: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const workspaceRoot = process.cwd()
-    const sourceScriptsDir = path.join(workspaceRoot, "scripts")
+    const __dirname = path.dirname(fileURLToPath(import.meta.url))
+    const packageScriptsDir = path.join(__dirname, "..", "..", "scripts")
+    const workspaceScriptsDir = path.join(process.cwd(), "scripts")
+
+    let sourceScriptsDir = packageScriptsDir
+    let sourceExists = yield* _(fs.exists(sourceScriptsDir))
+
+    if (!sourceExists) {
+      sourceScriptsDir = workspaceScriptsDir
+      sourceExists = yield* _(fs.exists(sourceScriptsDir))
+    }
+
     const targetScriptsDir = path.join(baseDir, "scripts")
 
-    const sourceExists = yield* _(fs.exists(sourceScriptsDir))
     if (!sourceExists) {
       return
     }

@@ -23,7 +23,7 @@
     "lint:tests": "PATH=../../scripts:$PATH vibecode-linter tests/",
     "lint:effect": "PATH=../../scripts:$PATH eslint --config eslint.effect-ts-check.config.mjs .",
     "prebuild:docker-git": "pnpm -C ../lib build",
-    "build:docker-git": "vite build --config vite.docker-git.config.ts",
+    "build:docker-git": "vite build --config vite.docker-git.config.ts && cp -r ../../scripts dist/",
     "check": "pnpm run typecheck",
     "clone": "pnpm -C ../.. run clone",
     "open": "pnpm -C ../.. run open",
