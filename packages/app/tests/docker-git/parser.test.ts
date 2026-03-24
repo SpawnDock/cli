@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import { hostname } from "node:os"
 
 import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
 import { expandContainerHome } from "@effect-template/lib/usecases/scrap-path"
@@ -36,6 +37,7 @@ describe("parseArgs", () => {
       expect(command.config.serviceName).toBe("dg-repo")
       expect(command.config.volumeName).toBe("dg-repo-home")
       expect(command.config.sshPort).toBe(defaultTemplateConfig.sshPort)
+      expect(command.config.clonedOnHostname).toBe(hostname())
     }))
 
   it.effect("parses create resource limit flags", () =>
