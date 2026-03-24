@@ -15,18 +15,18 @@ describe("remapDockerBindHostPathFromMounts", () => {
   })
 
   it("prefers the longest matching destination prefix", () => {
-    const next = remapDockerBindHostPathFromMounts("/home/dev/.docker-git/provercoderai/repo/.orch/auth/gh", [
+    const next = remapDockerBindHostPathFromMounts("/home/dev/.docker-git/spawndock/repo/.orch/auth/gh", [
       {
         source: "/home/user/.docker-git",
         destination: "/home/dev/.docker-git"
       },
       {
-        source: "/srv/docker-git/provercoderai/repo",
-        destination: "/home/dev/.docker-git/provercoderai/repo"
+        source: "/srv/docker-git/spawndock/repo",
+        destination: "/home/dev/.docker-git/spawndock/repo"
       }
     ])
 
-    expect(next).toBe("/srv/docker-git/provercoderai/repo/.orch/auth/gh")
+    expect(next).toBe("/srv/docker-git/spawndock/repo/.orch/auth/gh")
   })
 
   it("keeps the original path when no mount matches", () => {

@@ -228,15 +228,15 @@ describe("applyProjectConfig", () => {
         const path = yield* _(Path.Path)
 
         const projectsRoot = path.join(root, "projects-root")
-        const projectDir = path.join(projectsRoot, "provercoderai", "docker-git", "issue-72")
-        const workspaceRepoDir = path.join(root, "workspace", "docker-git")
-        const initialTargetDir = "/home/dev/workspaces/provercoderai/docker-git"
-        const updatedTargetDir = "/home/dev/workspaces/provercoderai/docker-git-updated"
+        const projectDir = path.join(projectsRoot, "spawndock", "cli", "issue-72")
+        const workspaceRepoDir = path.join(root, "workspace", "cli")
+        const initialTargetDir = "/home/dev/workspaces/spawndock/cli"
+        const updatedTargetDir = "/home/dev/workspaces/spawndock/cli-updated"
 
         const globalConfig = makeTemplateConfig(root, projectDir, path, initialTargetDir)
         const projectConfig = {
           ...makeTemplateConfig(root, projectDir, path, initialTargetDir),
-          repoUrl: "https://github.com/ProverCoderAI/docker-git.git",
+          repoUrl: "https://github.com/SpawnDock/cli.git",
           repoRef: "issue-72"
         }
 
@@ -257,7 +257,7 @@ describe("applyProjectConfig", () => {
         yield* _(runGit(workspaceRepoDir, ["config", "user.name", "test-user"]))
         yield* _(runGit(workspaceRepoDir, ["commit", "--allow-empty", "-m", "init"]))
         yield* _(runGit(workspaceRepoDir, ["checkout", "-b", "issue-72"]))
-        yield* _(runGit(workspaceRepoDir, ["remote", "add", "origin", "https://github.com/skulidropek/docker-git.git"]))
+        yield* _(runGit(workspaceRepoDir, ["remote", "add", "origin", "https://github.com/skulidropek/cli.git"]))
 
         const applied = yield* _(
           withPatchedProcess(

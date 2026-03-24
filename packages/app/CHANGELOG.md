@@ -1,4 +1,4 @@
-# @prover-coder-ai/docker-git
+# @spawn-dock/cli
 
 ## 1.0.68
 
