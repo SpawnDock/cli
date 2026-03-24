@@ -14,6 +14,12 @@ describe("parseArgs", () => {
       projectDirArg: "/tmp/project",
     })
   })
+
+  it("ignores the agent subcommand like session", () => {
+    expect(parseArgs(["agent", "--runtime", "claude"])).toEqual({
+      runtimeArg: "claude",
+    })
+  })
 })
 
 describe("resolveProjectDir", () => {

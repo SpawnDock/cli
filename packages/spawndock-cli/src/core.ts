@@ -29,7 +29,7 @@ export const parseArgs = (argv: ReadonlyArray<string>): SpawnDockCliOptions => {
       continue
     }
 
-    if (value === "session") {
+    if (value === "session" || value === "agent") {
       continue
     }
 
