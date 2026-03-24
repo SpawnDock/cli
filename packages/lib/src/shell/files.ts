@@ -10,7 +10,7 @@ import { type FileSpec, planFiles } from "../core/templates.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
 
-import { fileURLToPath } from "node:url"
+import { fileURLToPath } from "url"
 
 const ensureParentDir = (path: Path.Path, fs: FileSystem.FileSystem, filePath: string) =>
   fs.makeDirectory(path.dirname(filePath), { recursive: true })
