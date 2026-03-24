@@ -274,7 +274,7 @@ export const spawnAttachTmux = (
       yield* _(runTmux(["kill-session", "-t", session]))
     }
 
-    const keyArgs = sshKey !== null ? `-i ${sshKey} ` : ""
+    const keyArgs = sshKey === null ? "" : `-i ${sshKey} `
     const agentSshCommand =
       `ssh -tt ${keyArgs}-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${template.sshPort} ${template.sshUser}@localhost "cd '${projectDir}' && spawn-dock agent"`
 

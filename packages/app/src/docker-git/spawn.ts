@@ -5,6 +5,7 @@ import * as Path from "@effect/platform/Path"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
 import {
+  type CreateCommand,
   defaultTemplateConfig,
   deriveRepoSlug,
   type SpawnCommand,
@@ -12,11 +13,7 @@ import {
 } from "@effect-template/lib/core/domain"
 import { runCommandCapture, runCommandExitCode } from "@effect-template/lib/shell/command-runner"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
-import {
-  CommandFailedError,
-  SpawnProjectDirError,
-  SpawnSetupError
-} from "@effect-template/lib/shell/errors"
+import { CommandFailedError, SpawnProjectDirError, SpawnSetupError } from "@effect-template/lib/shell/errors"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import { findSshPrivateKey } from "@effect-template/lib/usecases/path-helpers"
 import { getContainerIpIfInsideContainer } from "@effect-template/lib/usecases/projects-core"
@@ -128,14 +125,14 @@ const parseProjectDir = (output: string): string | null => {
   return match?.[1]?.trim() ?? null
 }
 
-const buildSpawnCreateCommand = (outDir: string) => {
+const buildSpawnCreateCommand = (outDir: string): CreateCommand => {
   const repoSlug = deriveRepoSlug(SPAWNDOCK_REPO_URL)
   const containerName = `dg-${repoSlug}`
   const serviceName = `dg-${repoSlug}`
   const volumeName = `dg-${repoSlug}-home`
 
   return {
-    _tag: "Create" as const,
+    _tag: "Create",
     config: {
       ...defaultTemplateConfig,
       repoUrl: SPAWNDOCK_REPO_URL,
@@ -173,12 +170,13 @@ export const spawnProject = (command: SpawnCommand) =>
     const projectConfig = yield* _(readProjectConfig(resolvedOutDir))
     const template = projectConfig.template
 
-    const ipAddress = yield* _(
+    const containerIpRaw = yield* _(
       getContainerIpIfInsideContainer(fs, process.cwd(), template.containerName).pipe(
-        Effect.map((ip): string | undefined => ip),
-        Effect.orElse(() => Effect.succeed<string | undefined>(undefined))
+        Effect.map((ip) => ip ?? ""),
+        Effect.orElse(() => Effect.succeed(""))
       )
     )
+    const ipAddress: string | undefined = containerIpRaw.length > 0 ? containerIpRaw : undefined
 
     const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
 
