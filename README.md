@@ -1,22 +1,22 @@
 # docker-git
 
-`docker-git` создаёт отдельную Docker-среду для каждого репозитория, issue или PR.
-По умолчанию проекты лежат в `~/.docker-git`.
+`docker-git` creates a separate Docker environment for each repository, issue, or PR.
+By default, projects reside in `~/.docker-git`.
 
-## Что нужно
+## Prerequisites
 
-- Docker Engine или Docker Desktop
-- Доступ к Docker без `sudo`
-- Node.js и `npm`
+- Docker Engine or Docker Desktop
+- Docker access without `sudo`
+- Node.js and `npm`
 
-## Установка
+## Installation
 
 ```bash
 npm i -g @prover-coder-ai/docker-git
 docker-git --help
 ```
 
-## Авторизация
+## Authentication
 
 ```bash
 docker-git auth github login --web
@@ -24,41 +24,41 @@ docker-git auth codex login --web
 docker-git auth claude login --web
 ```
 
-## Пример
+## Example
 
-Можно передавать ссылку на репозиторий, ветку (`/tree/...`), issue или PR.
+You can pass a link to a repository, branch (`/tree/...`), issue, or PR.
 
 ```bash
 docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --mcp-playwright
 ```
 
-- `--force` пересоздаёт окружение и удаляет volumes проекта.
-- `--mcp-playwright` включает Playwright MCP и Chromium sidecar для браузерной автоматизации.
+- `--force` recreates the environment and removes the project's volumes.
+- `--mcp-playwright` enables Playwright MCP and the Chromium sidecar for browser automation.
 
-Автоматический запуск агента:
+Automatic agent launch:
 
 ```bash
 docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --auto
 ```
 
-- `--auto` сам выбирает Claude или Codex по доступной авторизации. Если доступны оба, выбор случайный.
-- `--auto=claude` или `--auto=codex` принудительно выбирает агента.
-- В auto-режиме агент сам выполняет задачу, создаёт PR и после завершения контейнер очищается.
+- `--auto` selects Claude or Codex based on available authentication. If both are available, the choice is random.
+- `--auto=claude` or `--auto=codex` forces a specific agent.
+- In auto mode the agent executes the task on its own, creates a PR, and the container is cleaned up after completion.
 
-## Подробности
+## Details
 
 `docker-git --help`
 
 ## SpawnDock CLI
 
-В этом workspace также есть отдельный package `@spawn-dock/cli` для bootstrapped
-SpawnDock TMA-проектов.
+This workspace also includes a separate package `@spawn-dock/cli` for bootstrapped
+SpawnDock TMA projects.
 
-Он запускается внутри каталога, где уже есть `spawndock.config.json`, и по
-умолчанию стартует `opencode`. Runtime можно переопределить через
-`SPAWNDOCK_AGENT_RUNTIME=codex|claude|opencode` или через `agentRuntime` в
+It runs inside a directory that already contains `spawndock.config.json` and
+defaults to launching `opencode`. The runtime can be overridden via
+`SPAWNDOCK_AGENT_RUNTIME=codex|claude|opencode` or via `agentRuntime` in
 `spawndock.config.json`.
 
-Это намеренно минимальный launcher. Он фиксирует project root и запускает
-агент только из него; `opencode` по умолчанию стартует через
-`codex sandbox linux`, а `codex` сам запускается с `workspace-write` sandbox.
+This is an intentionally minimal launcher. It locks the project root and launches
+the agent only from it; `opencode` by default starts via
+`codex sandbox linux`, and `codex` itself launches with `workspace-write` sandbox.
