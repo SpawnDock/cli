@@ -10,8 +10,8 @@ ROOT="$(mktemp -d "$ROOT_BASE/local-package-cli.XXXXXX")"
 KEEP="${KEEP:-0}"
 
 PACK_LOG="$ROOT/npm-pack.log"
-HELP_LOG_PNPM="$ROOT/docker-git-help-pnpm.log"
-HELP_LOG_NPM="$ROOT/docker-git-help-npm.log"
+HELP_LOG_PNPM="$ROOT/spawn-dock-help-pnpm.log"
+HELP_LOG_NPM="$ROOT/spawn-dock-help-npm.log"
 TAR_LIST="$ROOT/tar-list.txt"
 PACKED_TARBALL=""
 
@@ -28,11 +28,11 @@ on_error() {
     cat "$PACK_LOG" >&2 || true
   fi
   if [[ -f "$HELP_LOG_PNPM" ]]; then
-    echo "--- pnpm docker-git --help log ---" >&2
+    echo "--- pnpm spawn-dock --help log ---" >&2
     cat "$HELP_LOG_PNPM" >&2 || true
   fi
   if [[ -f "$HELP_LOG_NPM" ]]; then
-    echo "--- npm exec docker-git --help log ---" >&2
+    echo "--- npm exec spawn-dock --help log ---" >&2
     cat "$HELP_LOG_NPM" >&2 || true
   fi
 }
@@ -86,18 +86,18 @@ mkdir -p "$ROOT/project"
 cd "$ROOT/project"
 npm init -y >/dev/null
 pnpm add "$PACKED_TARBALL" --silent --lockfile=false
-pnpm docker-git --help >"$HELP_LOG_PNPM" 2>&1
+pnpm spawn-dock --help >"$HELP_LOG_PNPM" 2>&1
 
-grep -Fq -- "docker-git clone <url> [options]" "$HELP_LOG_PNPM" \
-  || fail "expected docker-git help output from local packed package"
+grep -Fq -- "spawn-dock clone <url> [options]" "$HELP_LOG_PNPM" \
+  || fail "expected spawn-dock help output from local packed package"
 
 mkdir -p "$ROOT/project-npm"
 cd "$ROOT/project-npm"
 npm init -y >/dev/null
 npm install "$PACKED_TARBALL" --silent --no-audit --fund=false
-npm exec -- docker-git --help >"$HELP_LOG_NPM" 2>&1
+npm exec -- spawn-dock --help >"$HELP_LOG_NPM" 2>&1
 
-grep -Fq -- "docker-git clone <url> [options]" "$HELP_LOG_NPM" \
-  || fail "expected docker-git help output via npm exec from local packed package"
+grep -Fq -- "spawn-dock clone <url> [options]" "$HELP_LOG_NPM" \
+  || fail "expected spawn-dock help output via npm exec from local packed package"
 
 echo "e2e/local-package-cli: local tarball install + pnpm/npm CLI execution OK" >&2
