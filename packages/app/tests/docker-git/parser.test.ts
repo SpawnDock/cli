@@ -36,6 +36,8 @@ describe("parseArgs", () => {
       expect(command.config.serviceName).toBe("dg-repo")
       expect(command.config.volumeName).toBe("dg-repo-home")
       expect(command.config.sshPort).toBe(defaultTemplateConfig.sshPort)
+      expect(typeof command.config.clonedOnHostname).toBe("string")
+      expect(String(command.config.clonedOnHostname).length).toBeGreaterThan(0)
     }))
 
   it.effect("parses create resource limit flags", () =>

@@ -47,6 +47,7 @@ export interface TemplateConfig {
   readonly pnpmVersion: string
   readonly agentMode?: AgentMode | undefined
   readonly agentAuto?: boolean | undefined
+  readonly clonedOnHostname?: string | undefined
 }
 
 export interface ProjectConfig {
