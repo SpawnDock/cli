@@ -1,5 +1,11 @@
 # @spawn-dock/cli
 
+## 1.0.76
+
+### Patch Changes
+
+- [#21](https://github.com/SpawnDock/cli/pull/21) [`a4af1ba`](https://github.com/SpawnDock/cli/commit/a4af1ba36ba0f0cd07f8442df237bef2b0aecea2) Thanks [@skulidropek](https://github.com/skulidropek)! - fix: execute agent directly via ssh instead of attaching tmux in spawn command
+
 ## 1.0.75
 
 ### Patch Changes
