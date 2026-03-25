@@ -119,6 +119,35 @@ const buildSpawnCreateCommand = (outDir: string, force: boolean): CreateCommand 
   }
 }
 
+const spawnAttachDirect = (
+  template: TemplateConfig,
+  projectDir: string,
+  sshKey: string | null,
+  ipAddress: string | undefined
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    yield* _(Effect.log("Starting opencode directly via SSH..."))
+    yield* _(
+      runCommandWithExitCodes(
+        {
+          cwd: process.cwd(),
+          command: "ssh",
+          args: buildSshArgs(
+            template,
+            sshKey,
+            ipAddress,
+            `cd '${projectDir}' && spawn-dock agent`
+          ).filter((arg) =>
+            arg !== "-T" && arg !== "-o" && arg !== "BatchMode=yes" && arg !== "ConnectTimeout=2" &&
+            arg !== "ConnectionAttempts=1"
+          )
+        },
+        [0, 255], // SSH frequently exits with 255 on user disconnect, which is normal
+        (exitCode) => new CommandFailedError({ command: "ssh agent", exitCode })
+      )
+    )
+  })
+
 // CHANGE: orchestrate spawn-dock spawn — creates container, runs @spawn-dock/create, opens tmux+opencode
 // WHY: provide one-command bootstrap from a Telegram bot pairing token
 // REF: spawn-command
@@ -173,21 +202,5 @@ export const spawnProject = (command: SpawnCommand) =>
 
     yield* _(Effect.log(`Project bootstrapped at ${projectDir}`))
 
-    yield* _(Effect.log("Starting opencode directly via SSH..."))
-    yield* _(
-      runCommandWithExitCodes(
-        {
-          cwd: process.cwd(),
-          command: "ssh",
-          args: buildSshArgs(
-            template,
-            sshKey,
-            ipAddress,
-            `cd '${projectDir}' && spawn-dock agent`
-          ).filter((arg) => arg !== "-T" && arg !== "-o" && arg !== "BatchMode=yes" && arg !== "ConnectTimeout=2" && arg !== "ConnectionAttempts=1")
-        },
-        [0, 255], // SSH frequently exits with 255 on user disconnect, which is normal
-        (exitCode) => new CommandFailedError({ command: "ssh agent", exitCode })
-      )
-    )
+    yield* _(spawnAttachDirect(template, projectDir, sshKey, ipAddress))
   })
