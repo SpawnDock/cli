@@ -138,15 +138,13 @@ const spawnAttachDirect = (
           command: "ssh",
           args: [
             "-tt", // Force TTY allocation for interactive opencode session
-            ...buildSshArgs(
-              template,
-              sshKey,
-              ipAddress,
-              `cd '${projectDir}' && spawn-dock agent`
-            ).filter((arg) =>
-              arg !== "-T" && arg !== "-o" && arg !== "BatchMode=yes" && arg !== "ConnectTimeout=2" &&
-              arg !== "ConnectionAttempts=1"
-            )
+            ...(sshKey !== null ? ["-i", sshKey] : []),
+            "-o", "LogLevel=ERROR",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-p", String(ipAddress ? 22 : template.sshPort),
+            `${template.sshUser}@${ipAddress ?? "localhost"}`,
+            `cd '${projectDir}' && spawn-dock agent`
           ]
         },
         [0, 255], // SSH frequently exits with 255 on user disconnect, which is normal
