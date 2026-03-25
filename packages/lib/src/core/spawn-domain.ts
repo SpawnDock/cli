@@ -7,4 +7,5 @@ export interface SpawnCommand {
   readonly _tag: "Spawn"
   readonly token: string
   readonly outDir: string
+  readonly force: boolean
 }
