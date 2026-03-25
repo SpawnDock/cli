@@ -11,14 +11,16 @@ import {
   type TemplateConfig
 } from "@effect-template/lib/core/domain"
 import type { SpawnCommand } from "@effect-template/lib/core/spawn-domain"
-import { runCommandCapture, runCommandExitCode } from "@effect-template/lib/shell/command-runner"
+import {
+  runCommandCapture,
+  runCommandExitCode,
+  runCommandWithExitCodes
+} from "@effect-template/lib/shell/command-runner"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
 import { CommandFailedError, SpawnProjectDirError, SpawnSetupError } from "@effect-template/lib/shell/errors"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import { findSshPrivateKey } from "@effect-template/lib/usecases/path-helpers"
 import { getContainerIpIfInsideContainer } from "@effect-template/lib/usecases/projects-core"
-
-import { spawnAttachTmux } from "./tmux.js"
 
 const SPAWNDOCK_REPO_URL = "https://github.com/SpawnDock/tma-project"
 const SPAWNDOCK_REPO_REF = "main"
@@ -121,6 +123,35 @@ const buildSpawnCreateCommand = (outDir: string, force: boolean): CreateCommand 
   }
 }
 
+const spawnAttachDirect = (
+  template: TemplateConfig,
+  projectDir: string,
+  sshKey: string | null,
+  ipAddress: string | undefined
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    yield* _(Effect.log("Starting opencode directly via SSH..."))
+    yield* _(
+      runCommandWithExitCodes(
+        {
+          cwd: process.cwd(),
+          command: "ssh",
+          args: buildSshArgs(
+            template,
+            sshKey,
+            ipAddress,
+            `cd '${projectDir}' && spawn-dock agent`
+          ).filter((arg) =>
+            arg !== "-T" && arg !== "-o" && arg !== "BatchMode=yes" && arg !== "ConnectTimeout=2" &&
+            arg !== "ConnectionAttempts=1"
+          )
+        },
+        [0, 255], // SSH frequently exits with 255 on user disconnect, which is normal
+        (exitCode) => new CommandFailedError({ command: "ssh agent", exitCode })
+      )
+    )
+  })
+
 // CHANGE: orchestrate spawn-dock spawn — creates container, runs @spawn-dock/create, opens tmux+opencode
 // WHY: provide one-command bootstrap from a Telegram bot pairing token
 // REF: spawn-command
@@ -174,5 +205,6 @@ export const spawnProject = (command: SpawnCommand) =>
     }
 
     yield* _(Effect.log(`Project bootstrapped at ${projectDir}`))
-    yield* _(spawnAttachTmux(template, projectDir, sshKey))
+
+    yield* _(spawnAttachDirect(template, projectDir, sshKey, ipAddress))
   })
