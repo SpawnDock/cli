@@ -11,11 +11,7 @@ import {
   type TemplateConfig
 } from "@effect-template/lib/core/domain"
 import type { SpawnCommand } from "@effect-template/lib/core/spawn-domain"
-import {
-  runCommandCapture,
-  runCommandExitCode,
-  runCommandWithExitCodes
-} from "@effect-template/lib/shell/command-runner"
+import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "@effect-template/lib/shell/command-runner"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
 import { CommandFailedError, SpawnProjectDirError, SpawnSetupError } from "@effect-template/lib/shell/errors"
 import { createProject } from "@effect-template/lib/usecases/actions"
