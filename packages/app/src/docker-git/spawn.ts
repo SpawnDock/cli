@@ -96,7 +96,7 @@ const parseProjectDir = (output: string): string | null => {
   return match?.[1]?.trim() ?? null
 }
 
-const buildSpawnCreateCommand = (outDir: string): CreateCommand => {
+const buildSpawnCreateCommand = (outDir: string, force: boolean): CreateCommand => {
   const repoSlug = deriveRepoSlug(SPAWNDOCK_REPO_URL)
   const containerName = `dg-${repoSlug}`
   const serviceName = `dg-${repoSlug}`
@@ -114,7 +114,7 @@ const buildSpawnCreateCommand = (outDir: string): CreateCommand => {
     },
     outDir,
     runUp: true,
-    force: false,
+    force,
     forceEnv: false,
     waitForClone: true,
     openSsh: false
@@ -134,7 +134,7 @@ export const spawnProject = (command: SpawnCommand) =>
     const path = yield* _(Path.Path)
 
     yield* _(Effect.log("Creating SpawnDock container..."))
-    const syntheticCreate = buildSpawnCreateCommand(command.outDir)
+    const syntheticCreate = buildSpawnCreateCommand(command.outDir, command.force)
     yield* _(createProject(syntheticCreate))
 
     const resolvedOutDir = path.resolve(command.outDir)

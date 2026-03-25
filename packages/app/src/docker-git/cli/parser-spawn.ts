@@ -23,7 +23,8 @@ export const parseSpawn = (args: ReadonlyArray<string>): Either.Either<Command, 
     const spawnCmd: SpawnCommand = {
       _tag: "Spawn",
       token: token.trim(),
-      outDir: raw.outDir ?? ".spawn-dock/spawndock"
+      outDir: raw.outDir ?? ".spawn-dock/spawndock",
+      force: raw.force ?? false
     }
     return Either.right(spawnCmd)
   })
