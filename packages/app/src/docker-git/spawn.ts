@@ -136,15 +136,18 @@ const spawnAttachDirect = (
         {
           cwd: process.cwd(),
           command: "ssh",
-          args: buildSshArgs(
-            template,
-            sshKey,
-            ipAddress,
-            `cd '${projectDir}' && spawn-dock agent`
-          ).filter((arg) =>
-            arg !== "-T" && arg !== "-o" && arg !== "BatchMode=yes" && arg !== "ConnectTimeout=2" &&
-            arg !== "ConnectionAttempts=1"
-          )
+          args: [
+            "-tt", // Force TTY allocation for interactive opencode session
+            ...buildSshArgs(
+              template,
+              sshKey,
+              ipAddress,
+              `cd '${projectDir}' && spawn-dock agent`
+            ).filter((arg) =>
+              arg !== "-T" && arg !== "-o" && arg !== "BatchMode=yes" && arg !== "ConnectTimeout=2" &&
+              arg !== "ConnectionAttempts=1"
+            )
+          ]
         },
         [0, 255], // SSH frequently exits with 255 on user disconnect, which is normal
         (exitCode) => new CommandFailedError({ command: "ssh agent", exitCode })
@@ -205,5 +208,6 @@ export const spawnProject = (command: SpawnCommand) =>
     }
 
     yield* _(Effect.log(`Project bootstrapped at ${projectDir}`))
+
     yield* _(spawnAttachDirect(template, projectDir, sshKey, ipAddress))
   })
