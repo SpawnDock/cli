@@ -1,5 +1,11 @@
 # @spawn-dock/cli
 
+## 1.0.75
+
+### Patch Changes
+
+- [#23](https://github.com/SpawnDock/cli/pull/23) [`868a72f`](https://github.com/SpawnDock/cli/commit/868a72f96ee43aca999678b4f57098d125213755) Thanks [@skulidropek](https://github.com/skulidropek)! - fix: force TTY allocation (-tt) during SSH so opencode is fully interactive without tmux
+
 ## 1.0.74
 
 ### Patch Changes

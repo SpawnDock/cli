@@ -1,6 +1,6 @@
 {
   "name": "@spawn-dock/cli",
-  "version": "1.0.74",
+  "version": "1.0.75",
   "description": "Minimal Vite-powered TypeScript console starter using Effect",
   "main": "dist/src/docker-git/main.js",
   "bin": {
